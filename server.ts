@@ -3,43 +3,16 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI } from '@google/genai';
+import { createApp } from './server/app.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function startServer() {
-  const app = express();
+  const app = createApp();
   const PORT = Number(process.env.PORT) || 8080;
 
-  app.use(express.json({ limit: '1mb' }));
-
-  app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok' });
-  });
-
-  app.post('/api/gemini', async (req, res) => {
-    try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ error: 'GEMINI_API_KEY is not configured' });
-      }
-      const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt : '';
-      if (!prompt.trim()) {
-        return res.status(400).json({ error: 'prompt is required' });
-      }
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-      });
-      res.json({ text: response.text ?? '' });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      res.status(500).json({ error: message });
-    }
-  });
-
   const isDev = process.argv.includes('--dev');
+
   if (isDev) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
