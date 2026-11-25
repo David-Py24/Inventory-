@@ -1,3 +1,5 @@
+# Inventory
+
 ---
 Docs type: README Template
 DocsID: README-20261125-init-INVENTORY
@@ -5,8 +7,6 @@ Module: Inventory
 Repository: Inventory
 Status: Active
 ---
-
-# Inventory
 
 Inventory management application with a React frontend and an Express/Drizzle backend.
 
