@@ -1,20 +1,85 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+---
+Docs type: README Template
+DocsID: README-20261125-init-INVENTORY
+Module: Inventory
+Repository: Inventory
+Status: Active
+---
 
-# Run and deploy your AI Studio app
+# Inventory
 
-This contains everything you need to run your app locally.
+Inventory management application with a React frontend and an Express/Drizzle backend.
 
-View your app in AI Studio: https://ai.studio/apps/198eaee5-e18e-4698-8852-7cc9a0618a78
+---
 
-## Run Locally
+## Overview
 
-**Prerequisites:**  Node.js
+Inventory tracks and manages stock through a React frontend backed by an Express API and Drizzle ORM.
 
+## Key Features
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- Inventory tracking and management
+- Express API with Drizzle ORM persistence
+
+## Repository Structure
+
+```text
+Inventory/
+├── Assets/                  # Brand assets and media
+├── Backups/                 # Archive snapshots
+├── Docs/                    # Specifications and API docs
+├── Github/                  # Issue templates and workflows
+├── Src/                     # Source code
+├── Documentation.md         # Progress and changelog
+├── README.md                # Overview and developer guide
+└── index.html               # Standalone preview (if applicable)
+```
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js
+- npm
+
+### Installation
+
+```bash
+# Clone the repository
+git clone TBD
+cd Inventory
+
+# Install dependencies
+npm install
+
+# Run the development server
+npm run dev
+```
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and fill in the required values.
+
+## Usage
+
+Run npm install, then npm run dev; configure .env from .env.example.
+
+## Integration
+
+### Syncing into `TanAW`
+
+```bash
+# Inside the main TanAW folder:
+git remote add inventory ../Inventory
+git fetch inventory
+git merge inventory/main --allow-unrelated-histories
+```
+
+## Documentation
+
+- [Documentation.md](Documentation.md) — dated progress and changelog.
+- Per-module notes under `Docs/`.
+
+## License
+
+TBD

@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_settings" ADD COLUMN "inventory_column_labels" jsonb DEFAULT '{}'::jsonb NOT NULL;

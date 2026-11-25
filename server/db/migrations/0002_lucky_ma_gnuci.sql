@@ -1,0 +1,1 @@
+ALTER TABLE "utang_transactions" ADD CONSTRAINT "utang_transactions_type_check" CHECK ("utang_transactions"."type" IN ('CREDIT', 'PAYMENT'));

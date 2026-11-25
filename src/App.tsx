@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Menu } from 'lucide-react';
+import { AnimatePresence, MotionConfig } from 'motion/react';
 import {
   AccountRecord,
   GoalItem,
   InventoryItem,
   MonthlyCashFlow,
   PageRoute,
+  SaleRecord,
   SinkingFund,
   TransactionRecord,
   UpcomingBill,
@@ -18,6 +19,7 @@ import {
   INITIAL_GOALS,
   INITIAL_INVENTORY,
   INITIAL_MONTHLY_CASH_FLOW,
+  INITIAL_SALES,
   INITIAL_SINKING_FUNDS,
   INITIAL_TRANSACTIONS,
   INITIAL_UPCOMING_BILLS,
@@ -25,8 +27,11 @@ import {
 } from './data/initialData';
 import { setActiveCurrency } from './utils/format';
 import { Sidebar } from './components/Sidebar';
+import { PageTransition } from './components/PageTransition';
+import { MobileHeader, MobileBottomNav } from './mobile';
 import { DashboardPage } from './pages/DashboardPage';
 import { InventoryPage } from './pages/InventoryPage';
+import { SalesPage } from './pages/SalesPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { AccountsPage } from './pages/AccountsPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -45,11 +50,13 @@ const INITIAL_SETTINGS: WorkspaceSettings = {
   defaultReorderPoint: 8,
   lowStockAlerts: true,
   includeBillsInSafeToSpend: false,
+  inventoryColumnLabels: {},
 };
 
 interface PersistedState {
   accounts: AccountRecord[];
   inventory: InventoryItem[];
+  sales: SaleRecord[];
   bills: UpcomingBill[];
   sinkingFunds: SinkingFund[];
   goals: GoalItem[];
@@ -64,6 +71,7 @@ function getDefaultState(): PersistedState {
   return {
     accounts: INITIAL_ACCOUNTS,
     inventory: INITIAL_INVENTORY,
+    sales: INITIAL_SALES,
     bills: INITIAL_UPCOMING_BILLS,
     sinkingFunds: INITIAL_SINKING_FUNDS,
     goals: INITIAL_GOALS,
@@ -93,6 +101,7 @@ function loadState(): PersistedState {
     return {
       accounts: Array.isArray(parsed.accounts) ? parsed.accounts : INITIAL_ACCOUNTS,
       inventory: Array.isArray(parsed.inventory) ? parsed.inventory : INITIAL_INVENTORY,
+      sales: Array.isArray(parsed.sales) ? parsed.sales : INITIAL_SALES,
       bills: Array.isArray(parsed.bills) ? parsed.bills : INITIAL_UPCOMING_BILLS,
       sinkingFunds: Array.isArray(parsed.sinkingFunds)
         ? parsed.sinkingFunds
@@ -117,6 +126,7 @@ function parseHashRoute(): PageRoute {
   const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
   if (
     hash === 'inventory' ||
+    hash === 'sales' ||
     hash === 'reports' ||
     hash === 'accounts' ||
     hash === 'profile' ||
@@ -373,6 +383,49 @@ export default function App() {
     }));
   };
 
+  // Sales handlers
+  const handleAddSale = (sale: Omit<SaleRecord, 'id'>, deductInventory: boolean) => {
+    const newSale: SaleRecord = {
+      ...sale,
+      id: `sale-${Date.now()}`,
+    };
+    const today = new Date().toLocaleDateString('en-US', {
+      month: 'short',
+      day: '2-digit',
+      year: 'numeric',
+    });
+    setState((prev) => ({
+      ...prev,
+      sales: [newSale, ...prev.sales],
+      inventory:
+        deductInventory && sale.inventoryItemId
+          ? prev.inventory.map((item) =>
+              item.id === sale.inventoryItemId
+                ? {
+                    ...item,
+                    quantity: Math.max(0, item.quantity - sale.quantity),
+                    lastUpdated: today,
+                  }
+                : item
+            )
+          : prev.inventory,
+    }));
+  };
+
+  const handleUpdateSale = (updated: SaleRecord) => {
+    setState((prev) => ({
+      ...prev,
+      sales: prev.sales.map((s) => (s.id === updated.id ? updated : s)),
+    }));
+  };
+
+  const handleDeleteSale = (id: string) => {
+    setState((prev) => ({
+      ...prev,
+      sales: prev.sales.filter((s) => s.id !== id),
+    }));
+  };
+
   // Settings handlers
   const handleSaveSettings = (nextSettings: WorkspaceSettings) => {
     setActiveCurrency(nextSettings.currency);
@@ -404,6 +457,7 @@ export default function App() {
       setState({
         accounts: parsed.accounts,
         inventory: parsed.inventory,
+        sales: Array.isArray(parsed.sales) ? parsed.sales : state.sales,
         bills: Array.isArray(parsed.bills) ? parsed.bills : state.bills,
         sinkingFunds: Array.isArray(parsed.sinkingFunds)
           ? parsed.sinkingFunds
@@ -436,17 +490,24 @@ export default function App() {
   // Render standalone Log In / Sign Up page ONLY when logged off
   if (!isAuthenticated || !currentUser) {
     return (
-      <AuthPage
-        storeName={state.settings.storeName}
-        workspaceSubtitle={state.settings.workspaceSubtitle}
-        onLogin={handleLogin}
-        onSignUp={handleSignUp}
-      />
+      <MotionConfig reducedMotion="user">
+        <AnimatePresence mode="wait" initial>
+          <PageTransition key="auth">
+            <AuthPage
+              storeName={state.settings.storeName}
+              workspaceSubtitle={state.settings.workspaceSubtitle}
+              onLogin={handleLogin}
+              onSignUp={handleSignUp}
+            />
+          </PageTransition>
+        </AnimatePresence>
+      </MotionConfig>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F1E8] text-[#23281E] flex flex-col md:flex-row">
+    <MotionConfig reducedMotion="user">
+      <div className="min-h-screen bg-[#F5F1E8] text-[#23281E] flex flex-col md:flex-row">
       <Sidebar
         activeRoute={route}
         onNavigate={navigate}
@@ -457,98 +518,103 @@ export default function App() {
         onCloseMobile={() => setMobileMenuOpen(false)}
       />
 
-      {/* Mobile Header (< md) */}
-      <header className="sticky top-0 z-30 flex h-[52px] items-center justify-between border-b border-[#E6E0D3] bg-[#2C3327] px-4 text-[#F5F2EB] md:hidden">
-        <button
-          type="button"
-          onClick={() => navigate('dashboard')}
-          className="font-serif text-[18px] font-semibold tracking-tight text-[#F6F3EC] truncate"
-        >
-          {state.settings.storeName}
-        </button>
-        <button
-          type="button"
-          onClick={() => setMobileMenuOpen(true)}
-          aria-label="Open navigation menu"
-          className="rounded-lg p-1.5 text-[#C8C7BD] hover:bg-white/10 hover:text-white transition-colors"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-      </header>
+      <MobileHeader
+        currentUser={currentUser}
+        onOpenProfile={() => navigate('profile')}
+        onOpenMenu={() => setMobileMenuOpen(true)}
+      />
 
-      <main className="flex-1 min-w-0 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
+      <main className="flex-1 min-w-0 px-4 py-5 pb-24 sm:px-6 sm:py-6 md:pb-6 lg:px-8 lg:py-7">
         <div className="mx-auto w-full max-w-[1280px]">
-          {route === 'dashboard' && (
-            <DashboardPage
-              accounts={state.accounts}
-              monthlyCashFlow={state.monthlyCashFlow}
-              bills={state.bills}
-              sinkingFunds={state.sinkingFunds}
-              goals={state.goals}
-              transactions={state.transactions}
-              defaultTimeframe={state.settings.defaultTimeframe}
-              includeBillsInSafeToSpend={state.settings.includeBillsInSafeToSpend}
-              onToggleBillPaid={handleToggleBillPaid}
-              onAddBill={handleAddBill}
-              onContributeFund={handleContributeFund}
-              onContributeGoal={handleContributeGoal}
-              onNavigate={navigate}
-            />
-          )}
+          <AnimatePresence mode="wait" initial>
+            <PageTransition key={route}>
+              {route === 'dashboard' && (
+                <DashboardPage
+                  accounts={state.accounts}
+                  monthlyCashFlow={state.monthlyCashFlow}
+                  bills={state.bills}
+                  sinkingFunds={state.sinkingFunds}
+                  goals={state.goals}
+                  transactions={state.transactions}
+                  defaultTimeframe={state.settings.defaultTimeframe}
+                  includeBillsInSafeToSpend={state.settings.includeBillsInSafeToSpend}
+                  onToggleBillPaid={handleToggleBillPaid}
+                  onAddBill={handleAddBill}
+                  onContributeFund={handleContributeFund}
+                  onContributeGoal={handleContributeGoal}
+                  onNavigate={navigate}
+                />
+              )}
 
-          {route === 'inventory' && (
-            <InventoryPage
-              items={state.inventory}
-              defaultReorderPoint={state.settings.defaultReorderPoint}
-              lowStockAlerts={state.settings.lowStockAlerts}
-              onAddItem={handleAddInventoryItem}
-              onUpdateItem={handleUpdateInventoryItem}
-              onDeleteItem={handleDeleteInventoryItem}
-              onAdjustQuantity={handleAdjustInventoryQuantity}
-            />
-          )}
+              {route === 'inventory' && (
+                <InventoryPage
+                  items={state.inventory}
+                  defaultReorderPoint={state.settings.defaultReorderPoint}
+                  lowStockAlerts={state.settings.lowStockAlerts}
+                  columnLabels={state.settings.inventoryColumnLabels}
+                  onAddItem={handleAddInventoryItem}
+                  onUpdateItem={handleUpdateInventoryItem}
+                  onDeleteItem={handleDeleteInventoryItem}
+                  onAdjustQuantity={handleAdjustInventoryQuantity}
+                />
+              )}
 
-          {route === 'reports' && (
-            <ReportsPage
-              accounts={state.accounts}
+          {route === 'sales' && (
+            <SalesPage
+              sales={state.sales}
               inventory={state.inventory}
-              monthlyCashFlow={state.monthlyCashFlow}
+              onAddSale={handleAddSale}
+              onUpdateSale={handleUpdateSale}
+              onDeleteSale={handleDeleteSale}
             />
           )}
 
-          {route === 'accounts' && (
-            <AccountsPage
-              users={state.users}
-              currentUser={currentUser}
-              onAddUser={handleAddUser}
-              onUpdateUser={handleUpdateUser}
-              onDeleteUser={handleDeleteUser}
-              onOpenProfile={() => navigate('profile')}
-              onLogout={handleLogout}
-            />
-          )}
+              {route === 'reports' && (
+                <ReportsPage
+                  accounts={state.accounts}
+                  inventory={state.inventory}
+                  monthlyCashFlow={state.monthlyCashFlow}
+                />
+              )}
 
-          {route === 'profile' && (
-            <ProfilePage
-              currentUser={currentUser}
-              users={state.users}
-              onUpdateUser={handleUpdateUser}
-              onBackToAccounts={() => navigate('accounts')}
-              onLogout={handleLogout}
-            />
-          )}
+              {route === 'accounts' && (
+                <AccountsPage
+                  users={state.users}
+                  currentUser={currentUser}
+                  onAddUser={handleAddUser}
+                  onUpdateUser={handleUpdateUser}
+                  onDeleteUser={handleDeleteUser}
+                  onOpenProfile={() => navigate('profile')}
+                  onLogout={handleLogout}
+                />
+              )}
 
-          {route === 'settings' && (
-            <SettingsPage
-              settings={state.settings}
-              onSaveSettings={handleSaveSettings}
-              onExportBackup={handleExportBackup}
-              onImportBackup={handleImportBackup}
-              onResetAll={handleResetDemoData}
-            />
-          )}
+              {route === 'profile' && (
+                <ProfilePage
+                  currentUser={currentUser}
+                  users={state.users}
+                  onUpdateUser={handleUpdateUser}
+                  onBackToAccounts={() => navigate('accounts')}
+                  onLogout={handleLogout}
+                />
+              )}
+
+              {route === 'settings' && (
+                <SettingsPage
+                  settings={state.settings}
+                  onSaveSettings={handleSaveSettings}
+                  onExportBackup={handleExportBackup}
+                  onImportBackup={handleImportBackup}
+                  onResetAll={handleResetDemoData}
+                />
+              )}
+            </PageTransition>
+          </AnimatePresence>
         </div>
       </main>
-    </div>
+
+      <MobileBottomNav activeRoute={route} onNavigate={navigate} />
+      </div>
+    </MotionConfig>
   );
 }

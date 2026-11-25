@@ -1,10 +1,25 @@
-export type PageRoute = 'dashboard' | 'inventory' | 'reports' | 'accounts' | 'settings' | 'profile';
+export type PageRoute = 'dashboard' | 'inventory' | 'sales' | 'reports' | 'accounts' | 'settings' | 'profile';
 
 export type TimeframeKey = 'this_month' | 'last_month' | 'quarter' | 'ytd';
 
 export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'PHP' | 'CAD' | 'AUD' | 'JPY';
 
+export type InventoryColumnKey =
+  | 'sku'
+  | 'name'
+  | 'category'
+  | 'location'
+  | 'supplier'
+  | 'quantity'
+  | 'reorderPoint'
+  | 'unitCost'
+  | 'totalValue'
+  | 'status';
+
+export type InventoryColumnLabels = Partial<Record<InventoryColumnKey, string>>;
+
 export interface WorkspaceSettings {
+  inventoryColumnLabels?: InventoryColumnLabels;
   storeName: string;
   workspaceSubtitle: string;
   ownerEmail: string;
@@ -100,6 +115,25 @@ export interface AccountRecord {
 export type UserRole = 'Admin' | 'Manager' | 'Staff';
 
 export type UserStatus = 'Active' | 'Suspended';
+
+export type SaleStatus = 'Completed' | 'Pending' | 'Refunded';
+
+export type SaleChannel = 'In-Store' | 'Online' | 'Wholesale' | 'POS';
+
+export interface SaleRecord {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  channel: SaleChannel;
+  inventoryItemId?: string;
+  itemName: string;
+  sku?: string;
+  quantity: number;
+  unitPrice: number;
+  status: SaleStatus;
+  date: string;
+  notes?: string;
+}
 
 export interface UserAccount {
   id: string;

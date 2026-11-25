@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HearthLedger Settings</title>
+<style>
+:root{--bg:#F6F3EC;--card:#FCFBF8;--bd:#E6E0D3;--bd2:#EFEAE0;--tx:#23281E;--mu:#6E7166;--lb:#5C6055;--in:#fff;--inb:#DDD6C7;--dk:#2C3327;--dkt:#FCFBF8;--gold:#C6A270;--ac:#B89260;--btn:#F8F5EE;--ok:#EEF6EF;--okt:#2E5A36;--okb:#C6DEC8;--er:#9B3B2B;--erbg:#FDF7F6;--erb:#E5C9C5;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171A14;--card:#1F231B;--bd:#343A2D;--bd2:#2B3025;--tx:#ECEADF;--mu:#9A9D90;--lb:#B5B8AA;--in:#171A14;--inb:#3E4536;--dk:#C6A270;--dkt:#1B1E17;--btn:#272C21;--ok:#1C2A1F;--okt:#8FCB9A;--okb:#2E4A33;--er:#E08A7A;--erbg:#2A1D1B;--erb:#5A3530;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#171A14;--card:#1F231B;--bd:#343A2D;--bd2:#2B3025;--tx:#ECEADF;--mu:#9A9D90;--lb:#B5B8AA;--in:#171A14;--inb:#3E4536;--dk:#C6A270;--dkt:#1B1E17;--btn:#272C21;--ok:#1C2A1F;--okt:#8FCB9A;--okb:#2E4A33;--er:#E08A7A;--erbg:#2A1D1B;--erb:#5A3530;color-scheme:dark}
+*{box-sizing:border-box}html{scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--tx);font:13px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+.serif{font-family:Georgia,"Times New Roman",serif}
+.wrap{max-width:1000px;margin:0 auto;padding:24px 16px 96px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+h1{font-size:26px;margin:0;font-weight:600}.sub{color:var(--mu);font-size:12.5px;margin:2px 0 0}
+.seg{display:inline-flex;border:1px solid var(--bd);border-radius:10px;padding:3px;background:var(--card)}
+.seg button{border:0;background:none;color:var(--lb);padding:6px 12px;border-radius:7px;font:inherit;font-weight:500;cursor:pointer}
+.seg button.on{background:var(--dk);color:var(--dkt)}
+.layout{display:flex;gap:24px;align-items:flex-start}
+aside{width:200px;flex-shrink:0;position:sticky;top:16px}
+nav{display:flex;flex-direction:column;gap:2px;border-left:1px solid var(--bd)}
+nav button{display:flex;align-items:center;border:0;border-left:2px solid transparent;margin-left:-1px;background:none;color:var(--mu);padding:8px 16px;border-radius:0;font:inherit;font-weight:500;text-align:left;cursor:pointer;white-space:nowrap;transition:color .15s}
+nav button:hover{color:var(--tx)}nav button.on{color:var(--tx);font-weight:600;border-left-color:var(--dk)}
+main{flex:1;min-width:0;max-width:760px;display:flex;flex-direction:column;gap:20px}
+.head{border-bottom:1px solid var(--bd);padding-bottom:14px;display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.head h2{margin:0;font-size:20px;font-weight:600}
+.card{border:1px solid var(--bd);background:var(--card);border-radius:12px;padding:22px}
+.card.danger{border-color:var(--erb)}
+.card h3{margin:0;font-size:14px}.card .d{color:var(--mu);font-size:12.5px;margin:2px 0 0}
+.ch{border-bottom:1px solid var(--bd2);padding-bottom:14px;margin-bottom:16px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+label.l{display:block;font-size:12px;font-weight:500;color:var(--lb);margin-bottom:6px}
+label.l code{font:10.5px ui-monospace,monospace;color:var(--mu);margin-left:6px}
+input[type=text],input[type=email],input[type=number],select{width:100%;border:1px solid var(--inb);background:var(--in);color:var(--tx);border-radius:8px;padding:8px 12px;font:inherit}
+input:focus,select:focus{outline:2px solid color-mix(in srgb,var(--ac) 30%,transparent);border-color:var(--ac)}
+.tog{display:flex;justify-content:space-between;align-items:center;gap:16px;border-top:1px solid var(--bd2);margin-top:18px;padding-top:14px;cursor:pointer}
+.tog b{font-weight:500;display:block}.tog span{color:var(--mu);font-size:12px}
+.tog input{width:16px;height:16px;accent-color:var(--dk);flex-shrink:0}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--inb);background:var(--btn);color:var(--tx);border-radius:8px;padding:8px 14px;font:inherit;font-weight:500;cursor:pointer}
+.btn.pri{background:var(--dk);color:var(--dkt);border-color:var(--dk)}
+.btn.dng{background:var(--erbg);border-color:var(--erb);color:var(--er)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.savebar{display:flex;justify-content:flex-end;gap:10px;border:1px solid var(--bd);background:var(--card);border-radius:12px;padding:14px 20px}
+.float{position:fixed;left:50%;transform:translateX(-50%) translateY(120%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:20;display:flex;gap:12px;align-items:center;border:1px solid var(--bd);background:var(--card);border-radius:14px;padding:10px 14px;box-shadow:0 8px 28px rgba(0,0,0,.18);transition:transform .2s}
+.float.show{transform:translateX(-50%) translateY(0)}
+.note{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--okb);background:var(--ok);color:var(--okt);border-radius:8px;padding:6px 12px;font-weight:500;font-size:12.5px}
+.note.err{border-color:var(--erb);background:var(--erbg);color:var(--er)}
+.hint{font-size:11.5px;color:var(--mu);margin:12px 0 0}
+.tag{font-size:11px;color:var(--mu);margin:0 0 8px;padding:0 4px}
+@media(max-width:760px){.layout{flex-direction:column}aside{width:100%;position:static}nav{flex-direction:row;overflow-x:auto}.grid{grid-template-columns:1fr}}
+</style></head>
+<body><div class="wrap">
+<div class="top"><div><h1 class="serif">Settings</h1><p class="sub">Workspace preferences</p></div>
+<div class="seg" role="group" aria-label="Layout"><button id="m-current" class="on">Current layout</button><button id="m-new">Suggested layout</button></div></div>
+<div class="layout"><aside><nav id="nav"></nav></aside><main id="main"></main></div>
+</div>
+<div class="float" id="float"><span>Unsaved changes</span><button class="btn" id="f-discard">Discard</button><button class="btn pri" id="f-save">Save settings</button></div>
+<script>
+const CUR=[['PHP','Philippine Peso'],['USD','US Dollar'],['EUR','Euro'],['JPY','Japanese Yen']];
+const TF=[['this_month','This Month'],['last_month','Last Month'],['quarter','This Quarter'],['ytd','Year to Date']];
+const COLS={sku:'SKU',name:'Item Name',category:'Category',quantity:'Quantity',reorderPoint:'Reorder Point',unitCost:'Unit Cost'};
+const D0={storeName:'HearthLedger',currency:'PHP',workspaceSubtitle:'Financial Command Center',defaultTimeframe:'this_month',defaultReorderPoint:5,lowStockAlerts:true,labels:{},ownerEmail:'owner@hearthledger.app',budgetCycleDay:'1',includeBills:true};
+let saved=structuredClone(D0),draft=structuredClone(D0),mode='current',tab='general',confirmReset=false,notice=null;
+const $=s=>document.querySelector(s);
+const dirty=()=>JSON.stringify(draft)!==JSON.stringify(saved);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+const sel=(k,opts)=>`<select data-k="${k}">${opts.map(([v,t])=>`<option value="${v}"${draft[k]==v?' selected':''}>${t}</option>`).join('')}</select>`;
+const txt=(k,ph,t='text')=>`<input data-k="${k}" type="${t}" value="${esc(draft[k])}" placeholder="${ph}">`;
+const fld=(l,i,id)=>`<div><label class="l">${l}</label>${i}</div>`;
+const tog=(k,t,d)=>`<label class="tog"><div><b>${t}</b><span>${d}</span></div><input type="checkbox" data-k="${k}"${draft[k]?' checked':''}></label>`;
+const card=(t,d,body,cls='',act='')=>`<section class="card ${cls}"><div class="ch"><div><h3>${t}</h3><p class="d">${d}</p></div>${act}</div>${body}</section>`;
+
+const S={
+ identity:()=>card('Store identity','Updates the sidebar branding and browser title.',`<div class="grid">${fld('Store Name',txt('storeName','HearthLedger'))}${fld('Workspace Tagline',txt('workspaceSubtitle','Financial Command Center'))}</div>`),
+ region:()=>card('Currency & defaults','Applied to formatting and the overview page across the app.',`<div class="grid">${fld('Display Currency',sel('currency',CUR.map(([c,l])=>[c,c+' — '+l])))}${fld('Default Overview Period',sel('defaultTimeframe',TF))}</div>`),
+ storeCombined:()=>card('Store & Currency','Updates sidebar branding, browser title, and currency formatting.',`<div class="grid">${fld('Store Name',txt('storeName','HearthLedger'))}${fld('Display Currency',sel('currency',CUR.map(([c,l])=>[c,c+' — '+l])))}${fld('Workspace Tagline',txt('workspaceSubtitle','Financial Command Center'))}${fld('Default Overview Period',sel('defaultTimeframe',TF))}</div>`),
+ stock:()=>card('Stock & reorder rules','Default thresholds and low-stock alert behavior.',`<div style="max-width:280px">${fld('Default Reorder Point',`<input data-k="defaultReorderPoint" type="number" min="0" step="1" value="${draft.defaultReorderPoint}">`)}</div>${tog('lowStockAlerts','Low-stock status warnings','Flag items when quantity drops to or below their reorder point.')}`),
+ cols:()=>card('Inventory column names','Display only. Underlying data and database columns are never renamed.',`<div class="grid">${Object.entries(COLS).map(([k,v])=>fld(`${v}<code>(${k})</code>`,`<input data-col="${k}" type="text" maxlength="24" value="${esc(draft.labels[k]??'')}" placeholder="${v}">`)).join('')}</div><p class="hint">Leave empty to use the default name.</p>`,'',`<button class="btn" id="resetNames">↺ Reset names</button>`),
+ accounts:()=>card('Owner & ledger defaults','Workspace ownership, billing cycle day, and safe-to-spend rules.',`<div class="grid">${fld('Primary Contact Email',txt('ownerEmail','owner@hearthledger.app','email'))}${fld('Budget Cycle Day',sel('budgetCycleDay',[['1','1st of Month'],['15','15th of Month'],['last','Last Day of Month']]))}</div>${tog('includeBills','Deduct unpaid upcoming bills from Safe-to-Spend','Reserve unpaid scheduled bills inside the dashboard available balance.')}`),
+ backup:(danger)=>card('Backup & recovery','Export a JSON snapshot of ledger, inventory, accounts, and settings.',`<div class="row"><button class="btn" id="exp">⬇ Export JSON backup</button><button class="btn" id="imp">⬆ Restore backup</button><input id="file" type="file" accept=".json,application/json" hidden></div>${danger?'':`<div class="row" style="margin-top:14px">${resetUI()}</div>`}${notice?`<div class="note ${notice.t}" style="margin-top:12px">${notice.m}</div>`:''}`),
+ danger:()=>card('Danger zone','Permanently erases all ledger, inventory, and account data. Export a backup first.',`<div class="row">${resetUI()}</div>`,'danger'),
+};
+function resetUI(){return confirmReset?`<span style="color:var(--er);font-weight:500">Reset all data?</span><button class="btn dng" id="rc">Confirm reset</button><button class="btn" id="rx">Cancel</button>`:`<button class="btn dng" id="rs">↺ Reset ledger data</button>`}
+const savebar=()=>`<div class="savebar">${dirty()?'<button type="button" class="btn" id="b-discard">Discard</button>':''}<button type="button" class="btn pri" id="b-save">Save settings</button></div>`;
+
+const NAV_CUR=[['general','General','Store identity, currency, and workspace backups.'],['inventory','Inventory','Reorder thresholds, stock alerts, and column names.'],['accounts','Accounts','Primary owner contact, budget cycle, and spending rules.']];
+const NAV_NEW=[['general','General'],['inventory','Inventory'],['accounts','Accounts'],['data','Data & recovery']];
+
+function render(){
+  $('#m-current').className=mode==='current'?'on':'';$('#m-new').className=mode==='new'?'on':'';
+  const items=mode==='current'?NAV_CUR:NAV_NEW;
+  $('#nav').innerHTML=items.map(([id,l])=>`<button data-nav="${id}" class="${mode==='current'&&tab===id?'on':''}">${l}</button>`).join('');
+  let h='';
+  if(mode==='current'){
+    const m=NAV_CUR.find(x=>x[0]===tab);
+    h=`<div class="head"><div><h2 class="serif">${m[1]}</h2><p class="sub">${m[2]}</p></div></div>`;
+    h+=tab==='general'?S.storeCombined():tab==='inventory'?S.stock()+S.cols():S.accounts();
+    h+=savebar();
+    if(tab==='general')h+=S.backup(false);
+  }else{
+    const sec=(id,t,d,b)=>`<div id="sec-${id}"><div class="head" style="margin-bottom:14px"><div><h2 class="serif">${t}</h2><p class="sub">${d}</p></div></div><div style="display:flex;flex-direction:column;gap:16px">${b}</div></div>`;
+    h=sec('general','General','How the workspace looks and formats numbers.',S.identity()+S.region())
+     +sec('inventory','Inventory','Reorder thresholds, stock alerts, and column names.',S.stock()+S.cols())
+     +sec('accounts','Accounts','Owner contact, budget cycle, and spending rules.',S.accounts())
+     +sec('data','Data & recovery','Backups live apart from preferences, destructive actions last.',S.backup(true)+S.danger());
+  }
+  $('#main').innerHTML=h;setTimeout(spy,0);
+  $('#float').classList.toggle('show',mode==='new'&&dirty());
+}
+function spy(){
+  if(mode!=='new')return;
+  let cur='general';
+  NAV_NEW.forEach(([id])=>{const el=document.getElementById('sec-'+id);if(el&&el.getBoundingClientRect().top<140)cur=id});
+  if(window.innerHeight+window.scrollY>=document.body.scrollHeight-4)cur='data';
+  document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('on',b.dataset.nav===cur));
+}
+function save(){
+  draft.storeName=draft.storeName.trim()||'HearthLedger';
+  draft.workspaceSubtitle=draft.workspaceSubtitle.trim()||'Financial Command Center';
+  draft.ownerEmail=draft.ownerEmail.trim()||saved.ownerEmail;
+  draft.defaultReorderPoint=Math.max(0,Number(draft.defaultReorderPoint)||0);
+  saved=structuredClone(draft);flash('ok','✓ Changes saved');
+}
+function flash(t,m){notice={t:t==='ok'?'':'err',m};render();setTimeout(()=>{notice=null;render()},2600)}
+function refreshBars(){
+  $('#float').classList.toggle('show',mode==='new'&&dirty());
+  const sb=document.querySelector('.savebar');if(sb&&mode==='current')sb.outerHTML=savebar();
+}
+addEventListener('scroll',spy,{passive:true});
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.dataset.k){const k=t.dataset.k;draft[k]=t.type==='checkbox'?t.checked:t.type==='number'?Math.max(0,Number(t.value)||0):t.value}
+  else if(t.dataset.col){draft.labels[t.dataset.col]=t.value}
+  else return;refreshBars();
+});
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button');if(!t)return;
+  if(t.id==='m-current'){mode='current';render()}
+  else if(t.id==='m-new'){mode='new';render()}
+  else if(t.dataset.nav){
+    if(mode==='current'){tab=t.dataset.nav;render()}
+    else document.getElementById('sec-'+t.dataset.nav).scrollIntoView({behavior:'smooth'});
+  }
+  else if(t.id==='b-save'||t.id==='f-save'){save()}
+  else if(t.id==='b-discard'||t.id==='f-discard'){draft=structuredClone(saved);render()}
+  else if(t.id==='resetNames'){draft.labels={};render()}
+  else if(t.id==='exp'){flash('err','Export is disabled in this preview. In the app it triggers onExportBackup.')}
+  else if(t.id==='imp'){$('#file').click()}
+  else if(t.id==='rs'){confirmReset=true;render()}
+  else if(t.id==='rx'){confirmReset=false;render()}
+  else if(t.id==='rc'){confirmReset=false;saved=structuredClone(D0);draft=structuredClone(D0);flash('ok','✓ All data reset to defaults')}
+});
+document.addEventListener('change',e=>{
+  if(e.target.id!=='file')return;
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{try{const j=JSON.parse(r.result);if(!j.storeName)throw 0;saved={...D0,...j};draft=structuredClone(saved);flash('ok','✓ Workspace backup restored successfully.')}catch{flash('err','Invalid backup file. Please choose a HearthLedger JSON export.')}};
+  r.readAsText(f);
+});
+render();
+</script></body></html>

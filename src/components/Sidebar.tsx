@@ -4,6 +4,7 @@ import {
   Home,
   Landmark,
   Package,
+  Receipt,
   RotateCcw,
   Settings,
   X,
@@ -23,6 +24,7 @@ interface SidebarProps {
 const NAV_ITEMS: { id: PageRoute; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
   { id: 'inventory', label: 'Inventory', icon: Package },
+  { id: 'sales', label: 'Sales', icon: Receipt },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
   { id: 'accounts', label: 'Accounts', icon: Landmark },
   { id: 'settings', label: 'Settings', icon: Settings },

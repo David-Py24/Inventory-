@@ -3,19 +3,23 @@ import {
   ArrowUpDown,
   Download,
   Minus,
+  Package,
   Pencil,
   Plus,
   Search,
   Trash2,
   X,
 } from 'lucide-react';
-import { InventoryCategory, InventoryItem, InventoryStatus } from '../types';
+import { InventoryCategory, InventoryColumnLabels, InventoryItem, InventoryStatus } from '../types';
 import { downloadCsv, formatCurrency, formatNumber, getCurrencySymbol } from '../utils/format';
+import { resolveInventoryColumnLabels } from '../utils/inventoryColumns';
+import { StarterPage } from './StarterPage';
 
 interface InventoryPageProps {
   items: InventoryItem[];
   defaultReorderPoint?: number;
   lowStockAlerts?: boolean;
+  columnLabels?: InventoryColumnLabels;
   onAddItem: (item: Omit<InventoryItem, 'id' | 'lastUpdated'>) => void;
   onUpdateItem: (item: InventoryItem) => void;
   onDeleteItem: (id: string) => void;
@@ -43,11 +47,14 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
   items,
   defaultReorderPoint = 8,
   lowStockAlerts = true,
+  columnLabels,
   onAddItem,
   onUpdateItem,
   onDeleteItem,
   onAdjustQuantity,
 }) => {
+  const labels = resolveInventoryColumnLabels(columnLabels);
+  const [view, setView] = useState<'inventory' | 'starter'>('inventory');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'All' | InventoryCategory>('All');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
@@ -186,7 +193,18 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
   const handleExportCsv = () => {
     downloadCsv(
       'hearthledger-inventory.csv',
-      ['SKU', 'Item Name', 'Category', 'Location', 'Supplier', 'Quantity', 'Reorder Point', 'Unit Cost', 'Total Value', 'Status'],
+      [
+        labels.sku,
+        labels.name,
+        labels.category,
+        labels.location,
+        labels.supplier,
+        labels.quantity,
+        labels.reorderPoint,
+        labels.unitCost,
+        labels.totalValue,
+        labels.status,
+      ],
       filteredItems.map((i) => [
         i.sku,
         i.name,
@@ -201,6 +219,26 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
       ])
     );
   };
+
+  if (view === 'starter') {
+    return (
+      <div className="space-y-4 sm:space-y-5">
+        <div className="flex items-center justify-between">
+          <h1 className="font-serif text-[24px] sm:text-[26px] font-semibold tracking-tight text-[#23281E]">
+            Stocks
+          </h1>
+          <button
+            type="button"
+            onClick={() => setView('inventory')}
+            className="rounded-lg border border-[#DDD6C7] bg-[#FCFBF8] px-3.5 py-2 text-[12.5px] font-medium text-[#2C3327] hover:bg-[#EFEAE0]"
+          >
+            Back to Inventory
+          </button>
+        </div>
+        <StarterPage />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -299,6 +337,14 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => setView('starter')}
+              className="inline-flex items-center gap-2 rounded-lg border border-[#DDD6C7] bg-[#FCFBF8] px-3.5 py-2 text-[12.5px] font-medium text-[#2C3327] hover:bg-[#EFEAE0] transition-colors whitespace-nowrap shrink-0"
+            >
+              <Package className="h-3.5 w-3.5 text-[#6E7166]" />
+              <span>Stocks</span>
+            </button>
           </div>
 
           <div
@@ -471,7 +517,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                         onClick={() => toggleSort('sku')}
                         className="inline-flex items-center gap-1 hover:text-[#23281E]"
                       >
-                        <span>SKU</span>
+                        <span>{labels.sku}</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
                     </th>
@@ -481,7 +527,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                         onClick={() => toggleSort('name')}
                         className="inline-flex items-center gap-1 hover:text-[#23281E]"
                       >
-                        <span>Item</span>
+                        <span>{labels.name}</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
                     </th>
@@ -491,18 +537,18 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                         onClick={() => toggleSort('category')}
                         className="inline-flex items-center gap-1 hover:text-[#23281E]"
                       >
-                        <span>Category</span>
+                        <span>{labels.category}</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
                     </th>
-                    <th className="py-3 px-3 whitespace-nowrap">Location</th>
+                    <th className="py-3 px-3 whitespace-nowrap">{labels.location}</th>
                     <th className="py-3 px-3 text-right whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => toggleSort('quantity')}
                         className="inline-flex items-center gap-1 hover:text-[#23281E]"
                       >
-                        <span>Qty</span>
+                        <span>{labels.quantity}</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
                     </th>
@@ -512,7 +558,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                         onClick={() => toggleSort('unitCost')}
                         className="inline-flex items-center gap-1 hover:text-[#23281E]"
                       >
-                        <span>Unit Cost</span>
+                        <span>{labels.unitCost}</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
                     </th>
@@ -522,11 +568,11 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                         onClick={() => toggleSort('totalValue')}
                         className="inline-flex items-center gap-1 hover:text-[#23281E]"
                       >
-                        <span>Total Value</span>
+                        <span>{labels.totalValue}</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
                     </th>
-                    <th className="py-3 px-3 whitespace-nowrap">Status</th>
+                    <th className="py-3 px-3 whitespace-nowrap">{labels.status}</th>
                     <th className="py-3 pl-3 pr-5 text-right whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
@@ -689,7 +735,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-[12px] font-medium text-[#5C6055] mb-1">
-                    SKU Code
+                    {labels.sku}
                   </label>
                   <input
                     type="text"
@@ -701,7 +747,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                 </div>
                 <div>
                   <label className="block text-[12px] font-medium text-[#5C6055] mb-1">
-                    Category
+                    {labels.category}
                   </label>
                   <select
                     value={category}
@@ -719,7 +765,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
 
               <div>
                 <label className="block text-[12px] font-medium text-[#5C6055] mb-1">
-                  Item Name
+                  {labels.name}
                 </label>
                 <input
                   type="text"
@@ -734,7 +780,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-[12px] font-medium text-[#5C6055] mb-1">
-                    Location / Bin
+                    {labels.location}
                   </label>
                   <input
                     type="text"
@@ -745,7 +791,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                 </div>
                 <div>
                   <label className="block text-[12px] font-medium text-[#5C6055] mb-1">
-                    Supplier
+                    {labels.supplier}
                   </label>
                   <input
                     type="text"
@@ -759,7 +805,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[12px] font-medium text-[#5C6055] mb-1">
-                    Quantity
+                    {labels.quantity}
                   </label>
                   <input
                     type="number"
@@ -772,7 +818,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                 </div>
                 <div>
                   <label className="block text-[12px] font-medium text-[#5C6055] mb-1">
-                    Reorder Pt.
+                    {labels.reorderPoint}
                   </label>
                   <input
                     type="number"
@@ -785,7 +831,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                 </div>
                 <div>
                   <label className="block text-[12px] font-medium text-[#5C6055] mb-1">
-                    Unit Cost ({getCurrencySymbol()})
+                    {labels.unitCost} ({getCurrencySymbol()})
                   </label>
                   <input
                     type="number"

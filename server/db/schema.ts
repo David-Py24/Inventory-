@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, boolean, numeric, timestamp, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, numeric, timestamp, integer, date, check, jsonb } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -88,4 +89,64 @@ export const workspaceSettings = pgTable('workspace_settings', {
   defaultReorderPoint: integer('default_reorder_point').notNull().default(8),
   lowStockAlerts: boolean('low_stock_alerts').notNull().default(true),
   includeBillsInSafeToSpend: boolean('include_bills_in_safe_to_spend').notNull().default(false),
+  // Display-only label overrides keyed by stable inventory column keys (never renames SQL columns)
+  inventoryColumnLabels: jsonb('inventory_column_labels')
+    .$type<Record<string, string>>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
 });
+
+// Starter MVP: master product catalog
+export const products = pgTable('products', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  skuCode: text('sku_code').unique(),
+  name: text('name').notNull(),
+  category: text('category').notNull().default('General'),
+  costPrice: numeric('cost_price', { precision: 14, scale: 2 }).notNull().default('0'),
+  retailPrice: numeric('retail_price', { precision: 14, scale: 2 }).notNull().default('0'),
+  currentQty: integer('current_qty').notNull().default(0),
+  reorderLevel: integer('reorder_level').notNull().default(5),
+  isPinnedRestock: boolean('is_pinned_restock').notNull().default(false),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Starter MVP: inventory batches for FIFO/expiration tracking
+export const inventoryBatches = pgTable('inventory_batches', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  productId: uuid('product_id')
+    .notNull()
+    .references(() => products.id, { onDelete: 'cascade' }),
+  qtyRemaining: integer('qty_remaining').notNull().default(0),
+  costPrice: numeric('cost_price', { precision: 14, scale: 2 }).notNull().default('0'),
+  expiryDate: date('expiry_date'),
+  receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Starter MVP: utang customer accounts
+export const utangCustomers = pgTable('utang_customers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  fullName: text('full_name').notNull(),
+  alias: text('alias'),
+  contactNumber: text('contact_number'),
+  creditLimit: numeric('credit_limit', { precision: 14, scale: 2 }).notNull().default('500'),
+  currentBalance: numeric('current_balance', { precision: 14, scale: 2 }).notNull().default('0'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Starter MVP: utang transaction ledger
+export const utangTransactions = pgTable(
+  'utang_transactions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => utangCustomers.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+    notes: text('notes'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    typeCheck: check('utang_transactions_type_check', sql`${table.type} IN ('CREDIT', 'PAYMENT')`),
+  })
+);
