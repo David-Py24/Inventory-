@@ -192,7 +192,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
 
   const handleExportCsv = () => {
     downloadCsv(
-      'hearthledger-inventory.csv',
+      'tallyledger-inventory.csv',
       [
         labels.sku,
         labels.name,

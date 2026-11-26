@@ -10,13 +10,13 @@ async function seed() {
     const passwordHash = await bcrypt.hash('password123', 10);
     await db.insert(users).values({
       name: 'Demo Admin',
-      email: 'admin@hearthledger.local',
+      email: 'admin@tallyledger.local',
       passwordHash,
       role: 'Admin',
       department: 'Finance',
       status: 'Active',
     });
-    console.log('Seeded demo user: admin@hearthledger.local / password123');
+    console.log('Seeded demo user: admin@tallyledger.local / password123');
   }
   const [settings] = await db.select().from(workspaceSettings).limit(1);
   if (!settings) {

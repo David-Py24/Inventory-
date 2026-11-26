@@ -95,7 +95,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
   const handleExportReport = () => {
     if (activeTab === 'financial') {
       downloadCsv(
-        'hearthledger-cashflow-report.csv',
+        'tallyledger-cashflow-report.csv',
         ['Month', 'Income', 'Expenses', 'Net Cash Flow', 'Savings Margin %'],
         monthlyCashFlow.map((m) => {
           const net = m.income - m.expenses;
@@ -105,7 +105,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
       );
     } else if (activeTab === 'expenses') {
       downloadCsv(
-        'hearthledger-expense-variance.csv',
+        'tallyledger-expense-variance.csv',
         ['Category', 'Planned', 'Actual', 'Variance', 'Share %', 'Status'],
         expenseCategories.map((c) => [
           c.name,
@@ -118,7 +118,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
       );
     } else {
       downloadCsv(
-        'hearthledger-inventory-valuation.csv',
+        'tallyledger-inventory-valuation.csv',
         ['Category', 'SKUs', 'Total Units', 'Asset Value', 'Reorder Alerts'],
         inventoryByCategory.map((g) => [
           g.category,

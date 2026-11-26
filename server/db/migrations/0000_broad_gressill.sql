@@ -78,7 +78,7 @@ CREATE TABLE "users" (
 --> statement-breakpoint
 CREATE TABLE "workspace_settings" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"store_name" text DEFAULT 'HearthLedger' NOT NULL,
+	"store_name" text DEFAULT 'TallyLedger' NOT NULL,
 	"workspace_subtitle" text DEFAULT 'Financial Command Center' NOT NULL,
 	"owner_email" text DEFAULT '' NOT NULL,
 	"currency" text DEFAULT 'USD' NOT NULL,

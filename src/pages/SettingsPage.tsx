@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Download, RotateCcw, Upload } from 'lucide-react';
+import { Check, Cloud, CloudDownload, CloudUpload, Download, RotateCcw, Upload } from 'lucide-react';
 import { CurrencyCode, TimeframeKey, WorkspaceSettings } from '../types';
+import { api } from '../api/client';
 import { CURRENCY_OPTIONS } from '../utils/format';
 import {
   DEFAULT_INVENTORY_COLUMN_LABELS,
@@ -11,6 +12,7 @@ import {
 
 interface SettingsPageProps {
   settings: WorkspaceSettings;
+  isOnline?: boolean;
   onSaveSettings: (next: WorkspaceSettings) => void;
   onExportBackup: () => void;
   onImportBackup: (jsonText: string) => boolean;
@@ -28,6 +30,7 @@ const SETTINGS_NAV_ITEMS: { id: SettingsSectionId; label: string }[] = [
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   settings,
+  isOnline = true,
   onSaveSettings,
   onExportBackup,
   onImportBackup,
@@ -41,7 +44,76 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     message: string;
   } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [backupStatus, setBackupStatus] = useState<{
+    lastBackupAt: string | null;
+    lastRestoreAt: string | null;
+    supabaseConfigured: boolean;
+    supabaseReachable?: boolean;
+  } | null>(null);
+  const [cloudBusy, setCloudBusy] = useState<'push' | 'pull' | null>(null);
+  const [cloudNotice, setCloudNotice] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    api
+      .getBackupStatus(true)
+      .then((res) => setBackupStatus(res))
+      .catch(() => {
+        // ignore if offline or unauthenticated
+      });
+  }, []);
+
+  const handleCloudBackup = async () => {
+    setCloudBusy('push');
+    setCloudNotice(null);
+    try {
+      const res = await api.pushCloudBackup();
+      setBackupStatus((prev) =>
+        prev
+          ? { ...prev, lastBackupAt: res.backedUpAt, supabaseReachable: true }
+          : { lastBackupAt: res.backedUpAt, lastRestoreAt: null, supabaseConfigured: true, supabaseReachable: true }
+      );
+      setCloudNotice({
+        type: 'success',
+        message: 'Local SQLite data backed up to Supabase PostgreSQL.',
+      });
+    } catch (err) {
+      setCloudNotice({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Cloud backup failed.',
+      });
+    } finally {
+      setCloudBusy(null);
+    }
+  };
+
+  const handleCloudRestore = async () => {
+    setCloudBusy('pull');
+    setCloudNotice(null);
+    try {
+      const res = await api.pullCloudRestore();
+      setBackupStatus((prev) =>
+        prev
+          ? { ...prev, lastRestoreAt: res.restoredAt, supabaseReachable: true }
+          : { lastBackupAt: null, lastRestoreAt: res.restoredAt, supabaseConfigured: true, supabaseReachable: true }
+      );
+      onResetAll();
+      setCloudNotice({
+        type: 'success',
+        message: 'Restored local SQLite database from Supabase PostgreSQL.',
+      });
+    } catch (err) {
+      setCloudNotice({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Cloud restore failed.',
+      });
+    } finally {
+      setCloudBusy(null);
+    }
+  };
 
   useEffect(() => {
     setDraft(settings);
@@ -79,7 +151,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     e?.preventDefault();
     onSaveSettings({
       ...draft,
-      storeName: draft.storeName.trim() || 'HearthLedger',
+      storeName: draft.storeName.trim() || 'TallyLedger',
       workspaceSubtitle: draft.workspaceSubtitle.trim() || 'Financial Command Center',
       ownerEmail: draft.ownerEmail.trim() || settings.ownerEmail,
       defaultReorderPoint: Math.max(0, Number(draft.defaultReorderPoint) || 0),
@@ -100,7 +172,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           ? { type: 'success', message: 'Workspace backup restored successfully.' }
           : {
               type: 'error',
-              message: 'Invalid backup file. Please choose a HearthLedger JSON export.',
+              message: 'Invalid backup file. Please choose a TallyLedger JSON export.',
             }
       );
       window.setTimeout(() => setImportStatus(null), 3500);
@@ -191,7 +263,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       required
                       value={draft.storeName}
                       onChange={(e) => setDraft({ ...draft, storeName: e.target.value })}
-                      placeholder="HearthLedger"
+                      placeholder="TallyLedger"
                       className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] text-[#23281E] focus:border-[#B89260] focus:outline-none focus:ring-2 focus:ring-[#B89260]/20"
                     />
                   </div>
@@ -428,7 +500,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       type="email"
                       value={draft.ownerEmail}
                       onChange={(e) => setDraft({ ...draft, ownerEmail: e.target.value })}
-                      placeholder="owner@hearthledger.app"
+                      placeholder="owner@tallyledger.app"
                       className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] text-[#23281E] focus:border-[#B89260] focus:outline-none focus:ring-2 focus:ring-[#B89260]/20"
                     />
                   </div>
@@ -536,6 +608,97 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     }`}
                   >
                     {importStatus.message}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-5 sm:p-6">
+                <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[#EFEAE0] pb-3.5 mb-4">
+                  <div>
+                    <h3 className="text-[14px] font-semibold text-[#23281E] flex items-center gap-2">
+                      <Cloud className="h-4 w-4 text-[#6E7166]" />
+                      <span>Online backup (Supabase PostgreSQL)</span>
+                    </h3>
+                    <p className="mt-0.5 text-[12.5px] text-[#6E7166]">
+                      Your workspace runs offline-first on local SQLite. Back up to or restore from
+                      Supabase when online.
+                    </p>
+                  </div>
+                  {backupStatus && (
+                    <span
+                     className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                         isOnline && backupStatus.supabaseReachable
+                           ? 'bg-[#EEF6EF] text-[#2E5A36]'
+                           : 'bg-[#F5F1E8] text-[#6E7166]'
+                       }`}
+                     >
+                       {!backupStatus.supabaseConfigured
+                         ? 'Supabase not configured'
+                         : isOnline && backupStatus.supabaseReachable
+                           ? 'Supabase reachable'
+                           : 'Supabase unreachable'}
+                     </span>
+                  )}
+                </div>
+
+                {backupStatus && (
+                  <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px] text-[#6E7166]">
+                    <div>
+                      Last backup:{' '}
+                      <span className="font-medium text-[#23281E]">
+                        {backupStatus.lastBackupAt
+                          ? new Date(backupStatus.lastBackupAt).toLocaleString()
+                          : 'Never'}
+                      </span>
+                    </div>
+                    <div>
+                      Last restore:{' '}
+                      <span className="font-medium text-[#23281E]">
+                        {backupStatus.lastRestoreAt
+                          ? new Date(backupStatus.lastRestoreAt).toLocaleString()
+                          : 'Never'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {!isOnline && (
+                  <p className="mb-3 text-[11.5px] text-[#9B3B2B]">
+                    You are offline. Cloud backup sync is temporarily disabled until you reconnect.
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <button
+                    type="button"
+                    disabled={cloudBusy !== null || !isOnline}
+                    onClick={handleCloudBackup}
+                    title={!isOnline ? 'No internet connection. Cloud backup disabled.' : undefined}
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#2C3327] px-3.5 py-2 text-[12.5px] font-medium text-[#FCFBF8] hover:bg-[#3A4333] disabled:opacity-50 transition-colors"
+                  >
+                    <CloudUpload className="h-3.5 w-3.5" />
+                    <span>{cloudBusy === 'push' ? 'Backing up…' : 'Back up to cloud'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={cloudBusy !== null || !isOnline}
+                    onClick={handleCloudRestore}
+                    title={!isOnline ? 'No internet connection. Cloud restore disabled.' : undefined}
+                    className="inline-flex items-center gap-2 rounded-lg border border-[#DDD6C7] bg-[#F8F5EE] px-3.5 py-2 text-[12.5px] font-medium text-[#2C3327] hover:bg-[#EFE9DC] disabled:opacity-50 transition-colors"
+                  >
+                    <CloudDownload className="h-3.5 w-3.5" />
+                    <span>{cloudBusy === 'pull' ? 'Restoring…' : 'Restore from cloud'}</span>
+                  </button>
+                </div>
+
+                {cloudNotice && (
+                  <div
+                    className={`mt-3 rounded-lg border px-3 py-2 text-[12.5px] ${
+                      cloudNotice.type === 'success'
+                        ? 'border-[#C6DEC8] bg-[#EEF6EF] text-[#2E5A36]'
+                        : 'border-[#E5C9C5] bg-[#FDF7F6] text-[#9B3B2B]'
+                    }`}
+                  >
+                    {cloudNotice.message}
                   </div>
                 )}
               </section>

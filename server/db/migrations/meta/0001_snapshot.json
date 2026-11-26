@@ -761,7 +761,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'HearthLedger'"
+          "default": "'TallyLedger'"
         },
         "workspace_subtitle": {
           "name": "workspace_subtitle",

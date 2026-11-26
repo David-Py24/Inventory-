@@ -1,6 +1,13 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('node:path');
 
+let autoUpdater = null;
+try {
+  autoUpdater = require('electron-updater').autoUpdater;
+} catch {
+  autoUpdater = null;
+}
+
 const developmentUrl = process.env.ELECTRON_RENDERER_URL || 'http://localhost:8080';
 
 function createWindow() {
@@ -18,13 +25,23 @@ function createWindow() {
 
   if (app.isPackaged) {
     window.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
-  } else {
+  } else if (process.env.ELECTRON_RENDERER_URL) {
     window.loadURL(developmentUrl);
+  } else {
+    window.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
   }
+
+  return window;
 }
 
 app.whenReady().then(() => {
   createWindow();
+
+  if (app.isPackaged && autoUpdater) {
+    autoUpdater.checkForUpdatesAndNotify().catch(() => {
+      // ignore update check failures
+    });
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

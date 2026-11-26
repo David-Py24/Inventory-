@@ -25,6 +25,20 @@ Inventory web application: React frontend (src/) and Express/Drizzle backend (se
 
 ## 2. Progress Log
 
+### `2026-11-26` — Align Supabase schema with cloud backup
+
+- **Action**: Investigated the backup failure shown in the app and prepared the missing Drizzle schema migration.
+- **Finding**: Supabase `public.users` lacked `username`; the backup schema also expects a `sales` table that was absent. This explains the failed upsert after the database connectivity check passed.
+- **Changes**: Generated `0004_add_backup_username_and_sales.sql`; added an explicit `db:migrate:supabase` command/config; changed server errors to avoid returning SQL parameters or password hashes to the UI.
+- **Verification**: Read-only Supabase metadata confirmed the missing column/table before migration and their presence afterward. `npm run lint` passed; Drizzle migration `0004` applied successfully and the ledger advanced to five entries. No backup/restore write was performed; Supabase `public.users` remains empty until the next cloud backup.
+
+### `2026-11-26` — Separate cloud backup connection from local PostgreSQL
+
+- **Action**: Routed cloud backup, restore, and online-account cloud lookups through the dedicated `SUPABASE_DATABASE_URL` setting. The general `DATABASE_URL` remains available to existing backend routes.
+- **Reason**: The local `.env` configured `DATABASE_URL` for `localhost:5432/tallyledger`, so the backup code could reach a local PostgreSQL database while the Supabase dashboard remained empty.
+- **Changes**: Added a lazy Supabase Drizzle client, updated backup status to identify Supabase configuration/reachability accurately, and documented a safe pooler URL placeholder in `.env.example`.
+- **Verification**: Read-only inspection found 2 local SQLite users and 6 rows in the reachable local PostgreSQL `public.users`; the local configuration has no `SUPABASE_DATABASE_URL`. `npm run lint` passed. No remote Supabase writes or app tests were run.
+
 ### `2026-11-26` — Document Supabase decisions, implementation, and operations
 
 - **Action**: Added reusable Supabase decision, implementation, and operations notes under `Docs/`.

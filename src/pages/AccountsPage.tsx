@@ -501,7 +501,7 @@ export const AccountsPage: React.FC<AccountsPageProps> = ({
                 <input
                   type="email"
                   required
-                  placeholder="alex@hearthledger.app"
+                  placeholder="alex@tallyledger.app"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] focus:border-[#B89260] focus:outline-none"

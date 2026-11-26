@@ -138,6 +138,7 @@ export interface SaleRecord {
 export interface UserAccount {
   id: string;
   name: string;
+  username?: string;
   email: string;
   password: string;
   role: UserRole;

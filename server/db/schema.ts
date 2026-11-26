@@ -4,7 +4,8 @@ import { sql } from 'drizzle-orm';
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
-  email: text('email').notNull().unique(),
+  username: text('username').unique(),
+  email: text('email').unique(),
   passwordHash: text('password_hash').notNull(),
   role: text('role').notNull().default('Staff'),
   department: text('department').notNull().default(''),
@@ -80,7 +81,7 @@ export const monthlyCashFlow = pgTable('monthly_cash_flow', {
 
 export const workspaceSettings = pgTable('workspace_settings', {
   id: uuid('id').primaryKey().defaultRandom(),
-  storeName: text('store_name').notNull().default('HearthLedger'),
+  storeName: text('store_name').notNull().default('TallyLedger'),
   workspaceSubtitle: text('workspace_subtitle').notNull().default('Financial Command Center'),
   ownerEmail: text('owner_email').notNull().default(''),
   currency: text('currency').notNull().default('USD'),
@@ -150,3 +151,21 @@ export const utangTransactions = pgTable(
     typeCheck: check('utang_transactions_type_check', sql`${table.type} IN ('CREDIT', 'PAYMENT')`),
   })
 );
+
+export const sales = pgTable('sales', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orderNumber: text('order_number').notNull(),
+  customerName: text('customer_name').notNull(),
+  channel: text('channel').notNull().default('In-Store'),
+  inventoryItemId: uuid('inventory_item_id').references(() => inventoryItems.id, {
+    onDelete: 'set null',
+  }),
+  itemName: text('item_name').notNull(),
+  sku: text('sku'),
+  quantity: integer('quantity').notNull().default(1),
+  unitPrice: numeric('unit_price', { precision: 14, scale: 2 }).notNull().default('0'),
+  status: text('status').notNull().default('Completed'),
+  date: text('date').notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

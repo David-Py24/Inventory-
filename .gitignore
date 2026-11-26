@@ -1,6 +1,7 @@
 node_modules/
 build/
 dist/
+release/
 coverage/
 .DS_Store
 *.log
@@ -8,3 +9,7 @@ coverage/
 !.env.example
 .aistudio/
 server.js
+data/
+*.db
+*.db-wal
+*.db-shm

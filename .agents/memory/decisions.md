@@ -2,6 +2,13 @@
 
 Add newest decisions at the top using the template. Mark a decision superseded when it changes; preserve the earlier rationale for traceability.
 
+## 2026-11-26 — Use a dedicated Supabase connection for cloud backups
+
+- **Decision:** Cloud backup, restore, reachability checks, and cloud-account lookups use `SUPABASE_DATABASE_URL`; `DATABASE_URL` remains the app's general PostgreSQL connection.
+- **Reason:** Local development may point `DATABASE_URL` at a local PostgreSQL service. Treating any reachable PostgreSQL server as Supabase can make backup status appear healthy while writing to the wrong database.
+- **Consequences:** Configure the Supabase Session Pooler URL as `SUPABASE_DATABASE_URL` in each runtime that offers cloud backup. Keep its value out of source control. Apply the Drizzle migrations to Supabase before backup/restore; existing installs without this value report Supabase as unconfigured and cannot use cloud backup until configured.
+- **Status:** Active
+
 ## 2026-11-25 — Apply Supabase schema through Drizzle migrations
 
 - **Decision:** Manage the app's Supabase PostgreSQL schema through versioned Drizzle migrations, applying them with `npm run db:migrate` locally and from GitHub Actions on `main`.

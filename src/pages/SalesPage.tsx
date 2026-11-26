@@ -219,7 +219,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
 
   const handleExportCsv = () => {
     downloadCsv(
-      'hearthledger-sales.csv',
+      'tallyledger-sales.csv',
       ['Order #', 'Customer', 'Channel', 'SKU', 'Item', 'Quantity', 'Unit Price', 'Total', 'Status', 'Date'],
       filteredSales.map((s) => [
         s.orderNumber,
