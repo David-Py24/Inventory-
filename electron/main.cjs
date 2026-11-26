@@ -10,6 +10,10 @@ try {
 
 const developmentUrl = process.env.ELECTRON_RENDERER_URL || 'http://localhost:8080';
 
+// Keep Chromium caches in a writable temp location to avoid permission errors.
+app.setPath('cache', path.join(app.getPath('temp'), 'tallyledger-cache'));
+app.setPath('gpuCache', path.join(app.getPath('temp'), 'tallyledger-gpu-cache'));
+
 function createWindow() {
   const window = new BrowserWindow({
     width: 1280,
