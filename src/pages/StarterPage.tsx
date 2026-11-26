@@ -25,21 +25,11 @@ type Customer = {
   balance: number;
 };
 
-const INITIAL_PRODUCTS: Product[] = [
-  { id: 'p1', name: 'Kopiko Black 3-in-1', category: 'Sachets', currentQty: 10, reorderLevel: 10, costPrice: 5, pinned: false },
-  { id: 'p2', name: 'Coca-Cola 330ml', category: 'Drinks', currentQty: 4, reorderLevel: 12, costPrice: 18, pinned: false },
-  { id: 'p3', name: 'Sardines 155g', category: 'Canned', currentQty: 0, reorderLevel: 6, costPrice: 21, pinned: true },
-];
+const INITIAL_PRODUCTS: Product[] = [];
 
-const INITIAL_BATCHES: Batch[] = [
-  { id: 'b1', productName: 'Coca-Cola 330ml', qtyRemaining: 24, expiryDate: '2026-12-31' },
-  { id: 'b2', productName: 'Sardines 155g', qtyRemaining: 12, expiryDate: '2026-11-28' },
-];
+const INITIAL_BATCHES: Batch[] = [];
 
-const INITIAL_CUSTOMERS: Customer[] = [
-  { id: 'c1', name: 'Juan Dela Cruz', alias: 'Kuya Juan', balance: 120 },
-  { id: 'c2', name: 'Maria Santos', alias: 'Ate Maria', balance: 0 },
-];
+const INITIAL_CUSTOMERS: Customer[] = [];
 
 type Tab = 'lowstock' | 'restock' | 'expiry' | 'utang';
 
@@ -138,11 +128,10 @@ export const StarterPage: React.FC = () => {
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`rounded-lg px-3.5 py-2 text-[12.5px] font-medium transition-colors ${
-              tab === t.id
+            className={`rounded-lg px-3.5 py-2 text-[12.5px] font-medium transition-colors ${tab === t.id
                 ? 'bg-[#2C3327] text-[#FCFBF8]'
                 : 'border border-[#DDD6C7] bg-[#FCFBF8] text-[#2C3327] hover:bg-[#EFEAE0]'
-            }`}
+              }`}
           >
             {t.label}
           </button>

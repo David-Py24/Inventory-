@@ -372,7 +372,24 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
           </div>
         </div>
 
-        {filteredItems.length === 0 ? (
+        {items.length === 0 ? (
+          <div className="py-12 px-6 text-center">
+            <div className="text-[14px] font-medium text-[#23281E]">
+              Your inventory table is empty
+            </div>
+            <p className="mt-1 text-[12.5px] text-[#6E7166]">
+              Add your first product or item to start tracking stock levels and costs.
+            </p>
+            <button
+              type="button"
+              onClick={openAddModal}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#2C3327] px-4 py-2 text-[12.5px] font-medium text-[#FAF8F3] hover:bg-[#3A4333]"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Add Item</span>
+            </button>
+          </div>
+        ) : filteredItems.length === 0 ? (
           <div className="py-12 px-6 text-center">
             <div className="text-[14px] font-medium text-[#23281E]">
               No inventory items match your filters

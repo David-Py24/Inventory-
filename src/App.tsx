@@ -38,7 +38,8 @@ import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AuthPage } from './pages/AuthPage';
 
-const STORAGE_KEY = 'hearthledger_state_v1';
+const STORAGE_KEY = 'hearthledger_state_v2';
+const LEGACY_STORAGE_KEY = 'hearthledger_state_v1';
 
 const INITIAL_SETTINGS: WorkspaceSettings = {
   storeName: 'HearthLedger',
@@ -78,13 +79,14 @@ function getDefaultState(): PersistedState {
     transactions: INITIAL_TRANSACTIONS,
     monthlyCashFlow: INITIAL_MONTHLY_CASH_FLOW,
     users: INITIAL_USERS,
-    currentUserId: INITIAL_USERS[0].id,
+    currentUserId: INITIAL_USERS[0]?.id ?? null,
     settings: INITIAL_SETTINGS,
   };
 }
 
 function loadState(): PersistedState {
   try {
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return getDefaultState();
     const parsed = JSON.parse(raw) as Partial<PersistedState>;

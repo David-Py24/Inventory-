@@ -75,9 +75,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       .filter((a) => a.isLiability)
       .reduce((sum, a) => sum + a.balance, 0);
 
-    const originalDebtBaseline = 16400;
+    const originalDebtBaseline = 0;
     const paidOff = Math.max(0, originalDebtBaseline - liabilities);
-    const pct = Math.min(100, Math.max(0, Math.round((paidOff / originalDebtBaseline) * 100)));
+    const pct =
+      originalDebtBaseline > 0
+        ? Math.min(100, Math.max(0, Math.round((paidOff / originalDebtBaseline) * 100)))
+        : 0;
 
     return {
       netWorth: assets - liabilities,
@@ -99,8 +102,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   }, [transactions, txSearch]);
 
   const remainingBudget = Math.max(0, periodData.plannedBudget - periodData.spentBudget);
-  const assignedPercent = 91;
-  const leftToAssign = 1121.65;
+  const assignedPercent =
+    periodData.plannedBudget > 0
+      ? Math.min(100, Math.round((periodData.spentBudget / periodData.plannedBudget) * 100))
+      : 0;
+  const leftToAssign = Math.max(0, periodData.incomeLeftToBudget);
   const perDaySafe = effectiveSafeToSpend / 30;
   const topPriorityBill = bills.find((b) => !b.paid) ?? bills[0];
 

@@ -10,6 +10,8 @@ Inventory management web application with a React frontend and an Express/Drizzl
 
 - Workspace folder: `Inventory`.
 - Main application: `Inventory`, a React + TypeScript + Vite + Express + Drizzle/PostgreSQL app with `src/`, `public/`, and app-level package manifests.
+- The Express backend connects to Supabase PostgreSQL through Drizzle and `DATABASE_URL`; the authoritative schema and migrations live in `server/db/`.
+- Root `supabase/` contains the Supabase CLI project config for linking and backup commands; CLI migrations and seeding are disabled so Drizzle remains the single migration source.
 - Sibling repositories: 0 page-focused or module projects, each with its own Git history where applicable.
 - Shared assets and archives: workspace-level `Assets/` and `Backups/`.
 - Root `Documentation.md` is the dated progress and changelog file.

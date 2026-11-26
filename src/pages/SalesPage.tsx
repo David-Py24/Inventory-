@@ -364,7 +364,24 @@ export const SalesPage: React.FC<SalesPageProps> = ({
           </div>
         </div>
 
-        {filteredSales.length === 0 ? (
+        {sales.length === 0 ? (
+          <div className="py-12 px-6 text-center">
+            <div className="text-[14px] font-medium text-[#23281E]">
+              Your sales table is empty
+            </div>
+            <p className="mt-1 text-[12.5px] text-[#6E7166]">
+              Record your first sale to start tracking orders and revenue.
+            </p>
+            <button
+              type="button"
+              onClick={openAddModal}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#2C3327] px-4 py-2 text-[12.5px] font-medium text-[#FAF8F3] hover:bg-[#3A4333]"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Record Sale</span>
+            </button>
+          </div>
+        ) : filteredSales.length === 0 ? (
           <div className="py-12 px-6 text-center">
             <div className="text-[14px] font-medium text-[#23281E]">
               No sales orders match your filters
