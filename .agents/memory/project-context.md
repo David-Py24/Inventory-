@@ -1,6 +1,6 @@
 # Project context
 
-Last reviewed: 2026-11-26
+Last reviewed: 2026-11-27
 
 ## Purpose
 
@@ -12,6 +12,7 @@ Inventory management web application with a React frontend and an Express/Drizzl
 - Main application: `Inventory`, a React + TypeScript + Vite + Express + Drizzle/PostgreSQL app with `src/`, `public/`, and app-level package manifests.
 - The Express backend's shared Drizzle/PostgreSQL client reads `DATABASE_URL`; the authoritative schema and migrations live in `server/db/`.
 - Offline workspace records are stored in local SQLite. Cloud backup, restore, and online account lookup use a separate `SUPABASE_DATABASE_URL` connection so a local `DATABASE_URL` cannot be mistaken for the hosted Supabase database.
+- Main workspace inventory, sales, settings, and utang ledger operate from SQLite; their PostgreSQL backup mirror is managed by Drizzle. The separate PostgreSQL `products`/`inventory_batches` starter subsystem is not yet consolidated with workspace `inventory_items`.
 - Root `supabase/` contains the Supabase CLI project config for linking and backup commands; CLI migrations and seeding are disabled so Drizzle remains the single migration source.
 - Sibling repositories: 0 page-focused or module projects, each with its own Git history where applicable.
 - Shared assets and archives: workspace-level `Assets/` and `Backups/`.

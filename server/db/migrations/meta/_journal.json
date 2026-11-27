@@ -36,6 +36,27 @@
       "when": 1795691123668,
       "tag": "0004_add_backup_username_and_sales",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795760325690,
+      "tag": "0005_retail_ledger_extensions",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795760770168,
+      "tag": "0006_fractional_product_stock",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795763977793,
+      "tag": "0007_hard_wind_dancer",
+      "breakpoints": true
     }
   ]
 }

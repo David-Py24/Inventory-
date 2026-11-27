@@ -13,6 +13,19 @@ export const sqlite = new DatabaseSync(SQLITE_DB_PATH);
 sqlite.exec('PRAGMA journal_mode = WAL;');
 sqlite.exec('PRAGMA foreign_keys = ON;');
 
+function backUpBeforeWorkspaceSchemaMigration(): void {
+  const targetVersion = 3;
+  const version = Number((sqlite.prepare('PRAGMA user_version').get() as { user_version?: number }).user_version ?? 0);
+  if (version >= targetVersion || !fs.existsSync(SQLITE_DB_PATH) || fs.statSync(SQLITE_DB_PATH).size === 0) return;
+  const stamp = new Date().toISOString().replace(/[-:.]/g, '');
+  const backupPath = `${SQLITE_DB_PATH}.pre-schema-v${targetVersion}-${stamp}.db`;
+  const escapedPath = backupPath.replace(/'/g, "''");
+  sqlite.exec(`VACUUM INTO '${escapedPath}'`);
+}
+
+// Preserve an existing workspace before the additive retail DDL runs below.
+backUpBeforeWorkspaceSchemaMigration();
+
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -64,6 +77,7 @@ sqlite.exec(`
     sku TEXT,
     quantity INTEGER NOT NULL DEFAULT 1,
     unit_price REAL NOT NULL DEFAULT 0,
+    selling_unit TEXT NOT NULL DEFAULT 'pc',
     status TEXT NOT NULL DEFAULT 'Completed',
     date TEXT NOT NULL,
     notes TEXT,
@@ -113,13 +127,40 @@ sqlite.exec(`
     store_name TEXT NOT NULL DEFAULT 'TallyLedger',
     workspace_subtitle TEXT NOT NULL DEFAULT 'Financial Command Center',
     owner_email TEXT NOT NULL DEFAULT '',
-    currency TEXT NOT NULL DEFAULT 'USD',
+    currency TEXT NOT NULL DEFAULT 'PHP',
     default_timeframe TEXT NOT NULL DEFAULT 'this_month',
     budget_cycle_day TEXT NOT NULL DEFAULT '1',
     default_reorder_point INTEGER NOT NULL DEFAULT 8,
     low_stock_alerts INTEGER NOT NULL DEFAULT 1,
     include_bills_in_safe_to_spend INTEGER NOT NULL DEFAULT 0,
-    inventory_column_labels TEXT NOT NULL DEFAULT '{}'
+    inventory_column_labels TEXT NOT NULL DEFAULT '{}',
+    business_type TEXT NOT NULL DEFAULT 'SARI_SARI',
+    require_customer_name INTEGER NOT NULL DEFAULT 0,
+    require_sale_status INTEGER NOT NULL DEFAULT 0,
+    enable_unit_conversions INTEGER NOT NULL DEFAULT 1,
+    column_mapping_json TEXT NOT NULL DEFAULT '{}',
+    sales_field_visibility TEXT NOT NULL DEFAULT '{}',
+    inventory_field_visibility TEXT NOT NULL DEFAULT '{}',
+    keyboard_shortcuts TEXT NOT NULL DEFAULT '{}'
+  );
+
+  CREATE TABLE IF NOT EXISTS utang_customers (
+    id TEXT PRIMARY KEY,
+    full_name TEXT NOT NULL,
+    alias TEXT,
+    contact_number TEXT,
+    credit_limit REAL NOT NULL DEFAULT 500,
+    current_balance REAL NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS utang_transactions (
+    id TEXT PRIMARY KEY,
+    customer_id TEXT NOT NULL REFERENCES utang_customers(id) ON DELETE RESTRICT,
+    type TEXT NOT NULL CHECK (type IN ('CREDIT', 'PAYMENT')),
+    amount REAL NOT NULL CHECK (amount > 0),
+    notes TEXT,
+    created_at TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS sync_metadata (
@@ -128,6 +169,38 @@ sqlite.exec(`
     updated_at TEXT NOT NULL
   );
 `);
+
+function ensureColumn(table: string, name: string, definition: string): void {
+  const columns = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some((column) => column.name === name)) {
+    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+  }
+}
+
+// Additive retail extensions keep existing local workspaces and sales intact.
+ensureColumn('inventory_items', 'unit_price', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('inventory_items', 'selling_unit', "TEXT NOT NULL DEFAULT 'pc'");
+ensureColumn('inventory_items', 'aliases_json', "TEXT NOT NULL DEFAULT '[]'");
+ensureColumn('inventory_items', 'base_unit', "TEXT NOT NULL DEFAULT 'pc'");
+ensureColumn('inventory_items', 'parent_product_id', 'TEXT');
+ensureColumn('inventory_items', 'conversion_factor', 'REAL NOT NULL DEFAULT 1');
+ensureColumn('inventory_items', 'is_auto_generated_sku', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('sales', 'unit_sold', "TEXT NOT NULL DEFAULT 'pc'");
+ensureColumn('sales', 'unit_cost_snapshot', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('sales', 'discount_amount', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('sales', 'amount_paid', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('sales', 'customer_id', 'TEXT');
+ensureColumn('sales', 'record_source', "TEXT NOT NULL DEFAULT 'POS_LIVE'");
+ensureColumn('sales', 'deduct_stock', 'INTEGER NOT NULL DEFAULT 1');
+ensureColumn('sales', 'extra_metadata', "TEXT NOT NULL DEFAULT '{}'");
+ensureColumn('workspace_settings', 'business_type', "TEXT NOT NULL DEFAULT 'SARI_SARI'");
+ensureColumn('workspace_settings', 'require_customer_name', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('workspace_settings', 'require_sale_status', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('workspace_settings', 'enable_unit_conversions', 'INTEGER NOT NULL DEFAULT 1');
+ensureColumn('workspace_settings', 'column_mapping_json', "TEXT NOT NULL DEFAULT '{}'");
+ensureColumn('workspace_settings', 'sales_field_visibility', "TEXT NOT NULL DEFAULT '{}'");
+ensureColumn('workspace_settings', 'inventory_field_visibility', "TEXT NOT NULL DEFAULT '{}'");
+ensureColumn('workspace_settings', 'keyboard_shortcuts', "TEXT NOT NULL DEFAULT '{}'");
 
 export function newId(): string {
   return crypto.randomUUID();
@@ -259,7 +332,7 @@ function ensureLocalBootstrap(): void {
         'TallyLedger',
         'Financial Command Center',
         'admin@tallyledger.local',
-        'USD',
+        'PHP',
         'this_month',
         '1',
         8,
@@ -271,3 +344,6 @@ function ensureLocalBootstrap(): void {
 }
 
 ensureLocalBootstrap();
+
+// Increment only after every local schema migration and bootstrap step succeeds.
+sqlite.exec('PRAGMA user_version = 3');

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Cloud, CloudDownload, CloudUpload, Download, RotateCcw, Upload } from 'lucide-react';
-import { CurrencyCode, TimeframeKey, WorkspaceSettings } from '../types';
+import { BusinessType, CurrencyCode, InventoryFieldKey, SalesFieldKey, ShortcutAction, TimeframeKey, WorkspaceSettings } from '../types';
 import { api } from '../api/client';
 import { CURRENCY_OPTIONS } from '../utils/format';
 import {
@@ -19,10 +19,11 @@ interface SettingsPageProps {
   onResetAll: () => void;
 }
 
-type SettingsSectionId = 'general' | 'inventory' | 'accounts' | 'data';
+type SettingsSectionId = 'general' | 'sales' | 'inventory' | 'accounts' | 'data';
 
 const SETTINGS_NAV_ITEMS: { id: SettingsSectionId; label: string }[] = [
   { id: 'general', label: 'General' },
+  { id: 'sales', label: 'Sales' },
   { id: 'inventory', label: 'Inventory' },
   { id: 'accounts', label: 'Accounts' },
   { id: 'data', label: 'Data & recovery' },
@@ -284,6 +285,28 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] text-[#23281E] focus:border-[#B89260] focus:outline-none focus:ring-2 focus:ring-[#B89260]/20"
                     />
                   </div>
+                  <div>
+                    <label htmlFor="settings-business-type" className="mb-1.5 block text-[12px] font-medium text-[#5C6055]">Retail business type</label>
+                    <select id="settings-business-type" value={draft.businessType ?? 'SARI_SARI'} onChange={(e) => setDraft({ ...draft, businessType: e.target.value as BusinessType })} className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] text-[#23281E]">
+                      <option value="SARI_SARI">Sari-sari store</option>
+                      <option value="HARDWARE">Hardware</option>
+                      <option value="AGRIVET">Agrivet</option>
+                      <option value="BAKERY">Bakery</option>
+                      <option value="SCHOOL_SUPPLY">School and office supplies</option>
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-2 text-[12.5px] text-[#4B4E44]">
+                    <input type="checkbox" checked={draft.requireCustomerName ?? false} onChange={(e) => setDraft({ ...draft, requireCustomerName: e.target.checked })} className="rounded border-[#CFC7B5] text-[#2C3327] focus:ring-[#B89260]" />
+                    Require a customer name on sales
+                  </label>
+                  <label className="flex items-center gap-2 text-[12.5px] text-[#4B4E44]">
+                    <input type="checkbox" checked={draft.requireSaleStatus ?? false} onChange={(e) => setDraft({ ...draft, requireSaleStatus: e.target.checked })} className="rounded border-[#CFC7B5] text-[#2C3327] focus:ring-[#B89260]" />
+                    Show sale status at checkout
+                  </label>
+                  <label className="flex items-center gap-2 text-[12.5px] text-[#4B4E44]">
+                    <input type="checkbox" checked={draft.enableUnitConversions ?? true} onChange={(e) => setDraft({ ...draft, enableUnitConversions: e.target.checked })} className="rounded border-[#CFC7B5] text-[#2C3327] focus:ring-[#B89260]" />
+                    Enable bulk-to-tingi conversions
+                  </label>
                 </div>
               </section>
 
@@ -346,6 +369,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </section>
             </div>
 
+            {/* Sales Section */}
+            <div id="settings-sec-sales" className="scroll-mt-6 space-y-4">
+              <div className="border-b border-[#E6E0D3] pb-3.5"><h2 className="font-serif text-[20px] font-semibold tracking-tight text-[#23281E]">Sales</h2><p className="mt-0.5 text-[12.5px] text-[#6E7166]">Choose visible sales fields and customize sales-page shortcuts.</p></div>
+              <section className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-5 sm:p-6"><div className="border-b border-[#EFEAE0] pb-3.5 mb-4"><h3 className="text-[14px] font-semibold text-[#23281E]">Visible fields</h3><p className="mt-0.5 text-[12.5px] text-[#6E7166]">Uncheck a field to hide it in the sales table and mobile cards.</p></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{(['customerName','channel','inventoryItem','sku','quantity','unitPrice','status','date','notes'] as SalesFieldKey[]).map((key) => <label key={key} className="flex cursor-pointer items-center gap-2 text-[12px] capitalize"><input type="checkbox" checked={draft.salesFieldVisibility?.[key] !== false} onChange={(e) => setDraft((current) => ({ ...current, salesFieldVisibility: { ...current.salesFieldVisibility, [key]: e.target.checked } }))}/>{key === 'inventoryItem' ? 'Item' : key.replace(/[A-Z]/g, (m) => ` ${m.toLowerCase()}`)}</label>)}</div></section>
+              <section className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-5 sm:p-6"><div className="border-b border-[#EFEAE0] pb-3.5 mb-4"><h3 className="text-[14px] font-semibold text-[#23281E]">Sales shortcuts</h3><p className="mt-0.5 text-[12.5px] text-[#6E7166]">Use combinations such as Alt+N, /, or Alt+E. Clear a field to disable its shortcut.</p></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{([['newSale','New sale'],['searchSales','Search sales'],['bulkEditSales','Select sales']] as [ShortcutAction,string][]).map(([key,label]) => <label key={key} className="text-[12px] font-medium text-[#5C6055]">{label}<input value={draft.keyboardShortcuts?.[key] ?? ''} placeholder="Disabled" onChange={(e) => setDraft((current) => ({ ...current, keyboardShortcuts: { ...current.keyboardShortcuts, [key]: e.target.value.trim() } }))} className="mt-1 w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] font-normal" /></label>)}</div></section>
+            </div>
+
             {/* Inventory Section */}
             <div id="settings-sec-inventory" className="scroll-mt-6 space-y-4">
               <div className="border-b border-[#E6E0D3] pb-3.5">
@@ -356,6 +386,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   Reorder thresholds, stock alerts, and column names.
                 </p>
               </div>
+
+              <section className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-5 sm:p-6"><div className="border-b border-[#EFEAE0] pb-3.5 mb-4"><h3 className="text-[14px] font-semibold text-[#23281E]">Visible inventory fields</h3><p className="mt-0.5 text-[12.5px] text-[#6E7166]">Uncheck a field to hide it from the inventory list and cards.</p></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{(['sku','name','category','location','supplier','quantity','unitCost'] as InventoryFieldKey[]).map((key) => <label key={key} className="flex cursor-pointer items-center gap-2 text-[12px] capitalize"><input type="checkbox" checked={draft.inventoryFieldVisibility?.[key] !== false} onChange={(e) => setDraft((current) => ({ ...current, inventoryFieldVisibility: { ...current.inventoryFieldVisibility, [key]: e.target.checked } }))}/>{key.replace(/[A-Z]/g, (m) => ` ${m.toLowerCase()}`)}</label>)}</div></section>
+              <section className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-5 sm:p-6"><div className="border-b border-[#EFEAE0] pb-3.5 mb-4"><h3 className="text-[14px] font-semibold text-[#23281E]">Inventory shortcuts</h3><p className="mt-0.5 text-[12.5px] text-[#6E7166]">Customize keyboard and selection actions for the inventory page.</p></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{([['newInventoryItem','New inventory item'],['searchInventory','Search inventory'],['bulkEditInventory','Select inventory']] as [ShortcutAction,string][]).map(([key,label]) => <label key={key} className="text-[12px] font-medium text-[#5C6055]">{label}<input value={draft.keyboardShortcuts?.[key] ?? ''} placeholder="Disabled" onChange={(e) => setDraft((current) => ({ ...current, keyboardShortcuts: { ...current.keyboardShortcuts, [key]: e.target.value.trim() } }))} className="mt-1 w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] font-normal" /></label>)}</div></section>
 
               <section className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-5 sm:p-6">
                 <div className="border-b border-[#EFEAE0] pb-3.5 mb-4">

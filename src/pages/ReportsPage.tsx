@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Download } from 'lucide-react';
-import { AccountRecord, InventoryItem, MonthlyCashFlow } from '../types';
+import { AccountRecord, InventoryItem, MonthlyCashFlow, SaleRecord } from '../types';
 import { TIMEFRAME_METRICS } from '../data/initialData';
 import { downloadCsv, formatCurrency, formatNumber, getCurrencySymbol } from '../utils/format';
 
@@ -8,14 +8,16 @@ interface ReportsPageProps {
   accounts: AccountRecord[];
   inventory: InventoryItem[];
   monthlyCashFlow: MonthlyCashFlow[];
+  sales: SaleRecord[];
 }
 
-type ReportTab = 'financial' | 'expenses' | 'inventory';
+type ReportTab = 'financial' | 'expenses' | 'inventory' | 'sales';
 
 export const ReportsPage: React.FC<ReportsPageProps> = ({
   accounts,
   inventory,
   monthlyCashFlow,
+  sales,
 }) => {
   const [activeTab, setActiveTab] = useState<ReportTab>('financial');
   const [activePoint, setActivePoint] = useState<{
@@ -176,6 +178,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
                 { id: 'financial', label: 'Financial' },
                 { id: 'expenses', label: 'Expenses' },
                 { id: 'inventory', label: 'Inventory' },
+                { id: 'sales', label: 'Sales' },
               ] as { id: ReportTab; label: string }[]
             ).map((tab) => (
               <button
@@ -794,6 +797,17 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'sales' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-4"><div className="text-xs font-semibold text-[#6E7166]">Completed sales</div><div className="mt-2 text-xl font-semibold text-[#23281E]">{formatCurrency(sales.filter((sale) => ['Completed','COMPLETED'].includes(sale.status)).reduce((sum, sale) => sum + sale.quantity * sale.unitPrice - (sale.discountAmount ?? 0), 0))}</div></div>
+            <div className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-4"><div className="text-xs font-semibold text-[#6E7166]">Open balance</div><div className="mt-2 text-xl font-semibold text-[#23281E]">{formatCurrency(sales.filter((sale) => ['Pending','PENDING','UTANG','PARTIAL','FOR_DELIVERY'].includes(sale.status)).reduce((sum, sale) => sum + Math.max(0, sale.quantity * sale.unitPrice - (sale.discountAmount ?? 0) - (sale.amountPaid ?? 0)), 0))}</div></div>
+            <div className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-4"><div className="text-xs font-semibold text-[#6E7166]">Recorded orders</div><div className="mt-2 text-xl font-semibold text-[#23281E]">{formatNumber(sales.length)}</div></div>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-[#E6E0D3] bg-[#FCFBF8]"><table className="w-full text-left text-sm"><thead className="bg-[#F8F5EE] text-xs text-[#6E7166]"><tr><th className="px-4 py-3">Order</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Item</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Total</th></tr></thead><tbody className="divide-y divide-[#EFEAE0]">{sales.map((sale) => <tr key={sale.id}><td className="px-4 py-3">{sale.orderNumber}</td><td className="px-4 py-3">{sale.customerName}</td><td className="px-4 py-3">{sale.itemName}</td><td className="px-4 py-3">{sale.status}</td><td className="px-4 py-3 text-right">{formatCurrency(sale.quantity * sale.unitPrice - (sale.discountAmount ?? 0))}</td></tr>)}</tbody></table></div>
         </div>
       )}
     </div>

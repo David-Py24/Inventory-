@@ -10,6 +10,8 @@ import type {
   UserAccount,
   UserRole,
   WorkspaceSettings,
+  UtangCustomer,
+  UtangTransaction,
 } from '../types';
 
 const TOKEN_STORAGE_KEY = 'tallyledger_auth_token';
@@ -148,6 +150,11 @@ export const api = {
       body: JSON.stringify({ delta }),
     }),
 
+  breakPack: (parentProductId: string, childProductId: string, parentQty: number) =>
+    request<{ parent: InventoryItem; child: InventoryItem }>(`/api/workspace/inventory/${parentProductId}/break-pack`, {
+      method: 'POST', body: JSON.stringify({ childProductId, parentQty }),
+    }),
+
   deleteInventoryItem: (id: string) =>
     request<void>(`/api/workspace/inventory/${id}`, {
       method: 'DELETE',
@@ -169,6 +176,10 @@ export const api = {
   deleteSale: (id: string) =>
     request<void>(`/api/workspace/sales/${id}`, {
       method: 'DELETE',
+    }),
+  importNotebookSales: (importId: string, rows: Array<{ rowNumber: number; date: string; quantity: number; product: string; sales: number }>) =>
+    request<{ importId: string; imported: number; skipped: Array<{ row: number; reason: string }>; saleIds: string[] }>('/api/workspace/sales/notebook-import', {
+      method: 'POST', body: JSON.stringify({ importId, rows }),
     }),
 
   // Bills, Funds, Goals
@@ -200,6 +211,14 @@ export const api = {
     request<WorkspaceSettings>('/api/workspace/settings', {
       method: 'PUT',
       body: JSON.stringify(settings),
+    }),
+
+  getUtangCustomers: () => request<UtangCustomer[]>('/api/utang/customers'),
+  createUtangCustomer: (customer: Pick<UtangCustomer, 'fullName'> & Partial<UtangCustomer>) =>
+    request<UtangCustomer>('/api/utang/customers', { method: 'POST', body: JSON.stringify(customer) }),
+  postUtangTransaction: (customerId: string, type: 'CREDIT' | 'PAYMENT', amount: number, notes?: string) =>
+    request<{ customer: UtangCustomer; transaction: UtangTransaction }>(`/api/utang/customers/${customerId}/transactions`, {
+      method: 'POST', body: JSON.stringify({ type, amount, notes }),
     }),
 
   // Users

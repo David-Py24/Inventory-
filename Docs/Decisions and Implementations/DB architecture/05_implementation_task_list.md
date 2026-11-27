@@ -1,7 +1,7 @@
 # 05 — Retail Database Restructuring Task List
 
 **Date:** 2026-11-27  
-**Status:** Ordered implementation backlog; execution has not started  
+**Status:** Implementation in progress
 **Scope:** Single-store retail MVP on the existing local SQLite + Drizzle/PostgreSQL + Supabase backup/restore architecture
 
 ## Delivery rules
@@ -11,6 +11,24 @@
 - Preserve existing user data. No table drops or clean resets as part of this work.
 - Keep `sync_outbox`, multi-store RLS, LAN replication, and NAS relay outside this milestone.
 - Generate and review migrations before applying them to any shared or hosted database.
+
+## Progress snapshot — 2026-11-27
+
+| Task | Status | Notes |
+|---|---|---|
+| DB-01 | Complete | Confirmed SQLite workspace routes are operational inventory/sales source; PostgreSQL `products`/batches is a separate path. |
+| DB-02 | Partial | Units, conversion direction, line math, and credit limits are implemented. Refund allocation and sale-to-payment allocation remain open. |
+| DB-03 | Complete for this implementation | Schema extensions match the active `inventory_items` and `sales` tables. PostgreSQL `products` is preserved as a separate existing subsystem. |
+| DB-04 | Complete | Drizzle schema and local SQLite startup migrations are implemented. |
+| DB-05 | Complete | Additive Drizzle migrations `0005` and `0006` were generated and reviewed; neither has been applied to a shared database. |
+| DB-06 | Partial | Main workspace now uses the extended local inventory catalog. A physical merge with PostgreSQL `products` remains deferred pending data/consumer mapping. |
+| DB-07 | Complete for workspace inventory | Fractional stock, non-negative adjustments, and transactional break-pack are implemented locally. |
+| DB-08 | Partial | Live/archive sale fields and stock snapshots are implemented. Refund flow and credit-sale financial edits remain restricted pending allocation rules. |
+| DB-09 | Partial | Utang is ledger-backed locally and included in backup/restore. Credit sales add charges; repayments are customer-ledger entries and are not allocated to individual sales. |
+| DB-10 | Partial | Notebook CSV import supports the four core fields, name/alias matching, deterministic SKU generation, and no-stock archive rows. Saved mapping profiles and import preview are not yet connected. |
+| DB-11 | Partial | Existing SQLite databases will be snapshotted before the local additive startup migration; no rehearsal was run against representative local and cloud data. |
+| DB-12 | Pending | Migrations have not been applied to local PostgreSQL or Supabase. |
+| DB-13 | Partial | Backup/restore field mappings are implemented. Schedule, retention, and restore drill remain operational work. |
 
 ## Phase 0 — Establish the current-state baseline
 

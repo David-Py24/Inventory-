@@ -10,6 +10,26 @@ Last reviewed: 2026-11-25
 
 # Inventory Documentation & Progress Log
 
+## 2026-11-27 — Separate retail preferences and dashboard views
+
+- Moved Sales and Inventory display and shortcut preferences out of General into their own Settings sidebar sections. Updated table visibility controls to use stable draft updates and immediate local feedback in each page’s View menu.
+- Dashboard Overview now contains the sales and inventory cards; Budget contains Net Worth, Cash Flow, Left to Spend, and Debt Payoff.
+- Verification: `npm run lint` and `git diff --check` passed. No application tests or visual checks were run.
+
+## 2026-11-27 — Connect retail workflows and configurable tables
+
+- Added a compact sale-status dropdown beside the channel filter, persisted sales and inventory field visibility, page-level display controls, and editable keyboard shortcuts. Inventory base and default selling units, aliases, and parent-product links are saved through the local SQLite workspace.
+- Added row selection and multi-edit actions (sales channel and inventory category), with keyboard shortcuts to open records, focus search, and select rows. Dashboard and Reports now summarize and list sales alongside live inventory data from the shared app state.
+- Extended the local SQLite schema to version 3 and cloud backup/restore mappings for selling units and user preferences. Existing workspaces are backed up before the additive schema upgrade. Generated Drizzle migration `0007_hard_wind_dancer.sql` for PostgreSQL; it has not been applied.
+- Verification: `npm run lint` and `git diff --check` passed. No application tests or database migration apply were run.
+
+## 2026-11-27 — Implement single-store retail ledger foundations
+
+- Extended the local workspace inventory and sales model with retail selling prices, units, aliases, fractional quantities, cost snapshots, discounts, payment/source metadata, and transactional bulk-to-tingi conversion. Blank SKUs now receive deterministic generated identifiers. Existing SQLite files are snapshotted with `VACUUM INTO` before the additive retail startup migration.
+- Added a local utang customer/transaction ledger, customer-backed credit sales, notebook CSV import that leaves live stock unchanged, and matching Supabase backup/restore fields.
+- Added Drizzle migrations `0005_retail_ledger_extensions.sql` and `0006_fractional_product_stock.sql`. They were generated and reviewed but not applied to a database. The PostgreSQL `products`/batch subsystem remains separate pending explicit data mapping.
+- Verification: `npm run lint` passed. No tests, migration apply, backup rehearsal, or restore drill were run.
+
 ## 2026-11-27 — Repair Electron prototype preview launch
 
 - Made Electron resolve the project root relative to `electron/main.cjs`, so launching that entry file no longer points at an incorrect `electron/dist` folder.

@@ -42,8 +42,8 @@ productsRouter.post('/', requireAuth, async (req, res, next) => {
         category: category ?? 'General',
         costPrice: String(costPrice ?? 0),
         retailPrice: String(retailPrice ?? 0),
-        currentQty: Number(currentQty ?? 0),
-        reorderLevel: Number(reorderLevel ?? 5),
+        currentQty: String(currentQty ?? 0),
+        reorderLevel: String(reorderLevel ?? 5),
         isPinnedRestock: Boolean(isPinnedRestock ?? false),
       })
       .returning();
@@ -65,8 +65,8 @@ productsRouter.patch('/:id', requireAuth, async (req, res, next) => {
         ...(body.category !== undefined ? { category: body.category } : {}),
         ...(body.costPrice !== undefined ? { costPrice: String(body.costPrice) } : {}),
         ...(body.retailPrice !== undefined ? { retailPrice: String(body.retailPrice) } : {}),
-        ...(body.currentQty !== undefined ? { currentQty: Number(body.currentQty) } : {}),
-        ...(body.reorderLevel !== undefined ? { reorderLevel: Number(body.reorderLevel) } : {}),
+        ...(body.currentQty !== undefined ? { currentQty: String(body.currentQty) } : {}),
+        ...(body.reorderLevel !== undefined ? { reorderLevel: String(body.reorderLevel) } : {}),
         ...(body.isPinnedRestock !== undefined
           ? { isPinnedRestock: Boolean(body.isPinnedRestock) }
           : {}),
@@ -85,13 +85,15 @@ productsRouter.post('/:id/adjust', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
     const delta = Number(req.body?.delta ?? 0);
+    if (!Number.isFinite(delta) || delta === 0 || !Number.isInteger(delta * 1000)) throw new HttpError(400, 'delta must be non-zero with at most 3 decimal places');
     const [current] = await db.select().from(products).where(eq(products.id, id));
     if (!current) throw new HttpError(404, 'product not found');
+    if (Number(current.currentQty) + delta < 0) throw new HttpError(409, 'adjustment would make stock negative');
 
     const [updated] = await db
       .update(products)
       .set({
-        currentQty: Math.max(0, current.currentQty + delta),
+        currentQty: String(Number(current.currentQty) + delta),
         updatedAt: new Date(),
       })
       .where(eq(products.id, id))
@@ -122,13 +124,15 @@ productsRouter.get('/restock-list', requireAuth, async (_req, res, next) => {
       .where(or(lte(products.currentQty, products.reorderLevel), eq(products.isPinnedRestock, true)));
 
     const list = rows.map((item) => {
+      const currentQty = Number(item.currentQty);
+      const reorderLevel = Number(item.reorderLevel);
       const suggestedBuyQty =
-        item.currentQty <= item.reorderLevel ? Math.max(item.reorderLevel - item.currentQty, 1) : 0;
+        currentQty <= reorderLevel ? Math.max(reorderLevel - currentQty, 1) : 0;
       return {
         id: item.id,
         name: item.name,
-        currentStock: item.currentQty,
-        reorderLevel: item.reorderLevel,
+        currentStock: currentQty,
+        reorderLevel,
         suggestedBuyQty,
         lastUnitCost: item.costPrice,
         estimatedSubtotal: (suggestedBuyQty * Number(item.costPrice)).toFixed(2),

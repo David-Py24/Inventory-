@@ -42,13 +42,31 @@ const DEFAULT_SETTINGS: WorkspaceSettings = {
   storeName: 'TallyLedger',
   workspaceSubtitle: 'Financial Command Center',
   ownerEmail: '',
-  currency: 'USD',
+  currency: 'PHP',
   defaultTimeframe: 'this_month',
   budgetCycleDay: '1',
   defaultReorderPoint: 8,
   lowStockAlerts: true,
   includeBillsInSafeToSpend: false,
   inventoryColumnLabels: {},
+  businessType: 'SARI_SARI',
+  requireCustomerName: false,
+  requireSaleStatus: false,
+  enableUnitConversions: true,
+  columnMapping: {},
+  salesFieldVisibility: {
+    customerName: true, channel: true, inventoryItem: true, sku: true, quantity: true,
+    unitPrice: true, status: true, date: true, notes: true,
+  },
+  inventoryFieldVisibility: {
+    sku: true, name: true, category: true, location: true, supplier: true,
+    quantity: true, unitCost: true, unitPrice: true, baseUnit: true, aliases: true,
+    parentProduct: true, reorderPoint: true,
+  },
+  keyboardShortcuts: {
+    newSale: 'Alt+N', searchSales: '/', bulkEditSales: 'Alt+E',
+    newInventoryItem: 'Alt+N', searchInventory: '/', bulkEditInventory: 'Alt+E',
+  },
 };
 
 interface WorkspaceState {
@@ -361,6 +379,14 @@ export default function App() {
     }));
   };
 
+  const handleBreakPack = async (parentId: string, childId: string, parentQty: number) => {
+    const result = await api.breakPack(parentId, childId, parentQty);
+    setState((prev) => ({
+      ...prev,
+      inventory: prev.inventory.map((item) => item.id === result.parent.id ? result.parent : item.id === result.child.id ? result.child : item),
+    }));
+  };
+
   // Sales handlers
   const handleAddSale = async (sale: Omit<SaleRecord, 'id'>, deductInventory: boolean) => {
     const { sale: createdSale, updatedInventory } = await api.addSale(sale, deductInventory);
@@ -581,6 +607,8 @@ export default function App() {
                 {route === 'dashboard' && (
                   <DashboardPage
                     accounts={state.accounts}
+                    inventory={state.inventory}
+                    sales={state.sales}
                     monthlyCashFlow={state.monthlyCashFlow}
                     bills={state.bills}
                     sinkingFunds={state.sinkingFunds}
@@ -599,6 +627,11 @@ export default function App() {
                 {route === 'inventory' && (
                   <InventoryPage
                     items={state.inventory}
+                    enableUnitConversions={state.settings.enableUnitConversions}
+                    fieldVisibility={state.settings.inventoryFieldVisibility}
+                    keyboardShortcuts={state.settings.keyboardShortcuts}
+                    onSaveSettings={handleSaveSettings}
+                    settings={state.settings}
                     defaultReorderPoint={state.settings.defaultReorderPoint}
                     lowStockAlerts={state.settings.lowStockAlerts}
                     columnLabels={state.settings.inventoryColumnLabels}
@@ -606,6 +639,7 @@ export default function App() {
                     onUpdateItem={handleUpdateInventoryItem}
                     onDeleteItem={handleDeleteInventoryItem}
                     onAdjustQuantity={handleAdjustInventoryQuantity}
+                    onBreakPack={handleBreakPack}
                   />
                 )}
 
@@ -613,6 +647,12 @@ export default function App() {
                   <SalesPage
                     sales={state.sales}
                     inventory={state.inventory}
+                    requireCustomerName={state.settings.requireCustomerName}
+                    requireSaleStatus={state.settings.requireSaleStatus}
+                    fieldVisibility={state.settings.salesFieldVisibility}
+                    keyboardShortcuts={state.settings.keyboardShortcuts}
+                    onSaveSettings={handleSaveSettings}
+                    settings={state.settings}
                     onAddSale={handleAddSale}
                     onUpdateSale={handleUpdateSale}
                     onDeleteSale={handleDeleteSale}
@@ -623,6 +663,7 @@ export default function App() {
                   <ReportsPage
                     accounts={state.accounts}
                     inventory={state.inventory}
+                    sales={state.sales}
                     monthlyCashFlow={state.monthlyCashFlow}
                   />
                 )}

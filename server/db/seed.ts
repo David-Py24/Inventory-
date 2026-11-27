@@ -33,8 +33,8 @@ async function seed() {
         category: 'Sachets',
         costPrice: '5.00',
         retailPrice: '7.00',
-        currentQty: 10,
-        reorderLevel: 10,
+        currentQty: '10',
+        reorderLevel: '10',
       },
       {
         skuCode: 'ST-COKE-330',
@@ -42,8 +42,8 @@ async function seed() {
         category: 'Drinks',
         costPrice: '18.00',
         retailPrice: '25.00',
-        currentQty: 4,
-        reorderLevel: 12,
+        currentQty: '4',
+        reorderLevel: '12',
       },
       {
         skuCode: 'ST-SARDINES-155',
@@ -51,8 +51,8 @@ async function seed() {
         category: 'Canned',
         costPrice: '21.00',
         retailPrice: '28.00',
-        currentQty: 0,
-        reorderLevel: 6,
+        currentQty: '0',
+        reorderLevel: '6',
         isPinnedRestock: true,
       },
     ]);

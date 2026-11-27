@@ -2,6 +2,13 @@
 
 Add newest decisions at the top using the template. Mark a decision superseded when it changes; preserve the earlier rationale for traceability.
 
+## 2026-11-27 — Keep retail workspace operations SQLite-first
+
+- **Decision:** The main retail workspace continues to read and write its operational inventory, sales, and utang ledger in local SQLite. Drizzle PostgreSQL mirrors those records through the existing backup/restore path. Extend the active `inventory_items` model rather than silently merging it with PostgreSQL `products`.
+- **Reason:** The main Inventory and Sales pages use SQLite workspace routes. PostgreSQL `products` and `inventory_batches` are a separate existing subsystem with different consumers and data; merging them without an explicit mapping could overwrite or orphan records.
+- **Consequences:** The app gains retail price/unit/SKU fields, fractional quantities, sale snapshots, archive imports, and local credit-ledger support. Existing SQLite files are snapshotted before the additive startup migration. PostgreSQL `products` remains separate until its consumers and data are mapped. Multi-store RLS and continuous outbox sync remain deferred. Apply Drizzle migrations `0005` and `0006` before using extended cloud backup/restore fields.
+- **Status:** Active for the single-store retail milestone
+
 ## 2026-11-26 — Use a dedicated Supabase connection for cloud backups
 
 - **Decision:** Cloud backup, restore, reachability checks, and cloud-account lookups use `SUPABASE_DATABASE_URL`; `DATABASE_URL` remains the app's general PostgreSQL connection.
@@ -21,7 +28,7 @@ Add newest decisions at the top using the template. Mark a decision superseded w
 - **Decision:** Use Supabase/PostgreSQL (not local SQLite) for Inventory Starter MVP and pair DB/backend/frontend branches.
 - **Reason:** Team chose Supabase for managed Postgres and easier shared environments; branch isolation reduces migration risk.
 - **Consequences:** Guardrails shift from zero-cloud to managed-cloud; migrations must be applied per branch and reviewed before merge.
-- **Status:** Active
+- **Status:** Superseded for daily retail workspace operations by the 2026-11-27 SQLite-first decision; PostgreSQL remains the cloud mirror and separate batch subsystem.
 
 ## 2026-11-25 — {{DECISION_TITLE}}
 
