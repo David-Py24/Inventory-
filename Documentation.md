@@ -10,6 +10,35 @@ Last reviewed: 2026-11-25
 
 # Inventory Documentation & Progress Log
 
+## 2026-11-27 — Repair Electron prototype preview launch
+
+- Made Electron resolve the project root relative to `electron/main.cjs`, so launching that entry file no longer points at an incorrect `electron/dist` folder.
+- Updated the desktop preview launcher to reuse an active renderer server or start its own on port 8081 by default. Its Vite dependency cache and HMR port are isolated to avoid conflicts with another running preview.
+- Verification: Electron script syntax checks passed. A local preview launch was attempted, but this environment could not open its localhost socket; startup also encountered a locked shared Vite cache, which motivated isolating the preview cache. Re-run `npm run desktop:preview` on the host to confirm the window opens.
+
+## 2026-11-27 — Apply geometric warm-gold logo
+
+- Replaced the prior temporary mark with the geometric symbol from the supplied inspiration image, excluding its sample text/tagline. Recolored it to muted warm gold (`#9E825E`) and used a dark olive app-icon background (`#262A21`).
+- Configured electron-builder's Windows icon explicitly as `public/app-icon.ico` and set the Electron window/taskbar icon from the PNG packaged in `dist/`. Updated the browser favicon and shared `BrandLogo` asset.
+- Verification: `npm run build` and `npx vite build --mode desktop` succeeded; confirmed the ICO contains sizes through 256×256 and the packaged desktop output includes `dist/app-icon.png`. `npm run desktop:build` reached electron-builder but could not finish because GitHub DNS was unavailable while fetching a Windows packaging dependency. Installer rebuild and Windows shell icon refresh are still required to see the new icon on the test PC.
+
+## 2026-11-26 — Temporary app logo and icon
+
+- Prepared the supplied logo as a clean transparent mark for the shared `BrandLogo` component and as a dark-backed PNG/ICO for the app and Windows installer. Added the site favicon link and wired the existing Electron Windows icon setting to the generated ICO.
+- Verification: both `npm run build` and `npx vite build --mode desktop` succeeded. Both builds emitted the logo as a bundled asset. Installer generation and installed-app visual verification were not run.
+
+## 2026-11-26 — Desktop release workflow
+
+- Added a hot-reload Electron preview command that manages the development server lifecycle.
+- Added a Windows NSIS build command with Electron-safe relative asset paths, deterministic installer naming, and interactive per-user install settings. Web build paths remain unchanged.
+- Made automatic update check failures visible in stderr. A GitHub release feed, code signing, clean-machine install/upgrade verification, and end-to-end installer build remain release tasks.
+- Verification: `npm run build` passed. `npm run desktop:build` reached electron-builder but could not download a packaging dependency because DNS/network access to GitHub is unavailable in this environment.
+
+## 2026-11-26 — Fix Electron startup path error
+
+- Removed the unsupported `gpuCache` app path override that caused the installed app to throw before creating its window. Kept Electron's writable cache override.
+- Verification: `node --check electron/main.cjs` passed. Rebuilding the installer remains blocked because electron-builder cannot resolve GitHub to download its Windows packaging dependency, so the fix has not yet been verified in an installed build.
+
 **Module**: Inventory  
 **Role**: Main application  
 **Focus Area**: Full-stack inventory management  

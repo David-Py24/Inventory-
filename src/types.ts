@@ -1,5 +1,7 @@
 export type PageRoute = 'dashboard' | 'inventory' | 'sales' | 'reports' | 'accounts' | 'settings' | 'profile';
 
+export type LandingSection = 'overview' | 'features' | 'download' | 'docs';
+
 export type TimeframeKey = 'this_month' | 'last_month' | 'quarter' | 'ytd';
 
 export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'PHP' | 'CAD' | 'AUD' | 'JPY';

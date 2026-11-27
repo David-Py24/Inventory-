@@ -4,207 +4,81 @@
     "type": "split",
     "children": [
       {
-        "id": "8f25b55c2ea9883a",
+        "id": "d373dc8f20e84d2d",
         "type": "tabs",
         "children": [
           {
-            "id": "239d152eafd74720",
+            "id": "8f2a86fb7b876302",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Docs/Plan/frontend-branch-plan.md",
+                "file": "Untitled 3.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "frontend-branch-plan"
+              "title": "Untitled 3"
             }
           },
           {
-            "id": "daa5e10279da4a83",
+            "id": "cf5dc19904c8ba98",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Docs/Research/complete docker-compose.yaml for PowerSync and PostgreSQL configuration.md",
+                "file": "Untitled 5.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "complete docker-compose.yaml for PowerSync and PostgreSQL configuration"
+              "title": "Untitled 5"
             }
           },
           {
-            "id": "12b6e87473f3ea8c",
+            "id": "76ebdc79041a7943",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Untitled 2.md",
+                "file": "Untitled 4.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Untitled 2"
+              "title": "Untitled 4"
             }
           },
           {
-            "id": "f3a35b7576ca40b3",
+            "id": "0885d26b2dd019e3",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Docs/Research/Web-based to Standalone.md",
+                "file": "Planning review.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Web-based to Standalone"
+              "title": "Planning review"
             }
           },
           {
-            "id": "c4cc94d074141fcc",
+            "id": "95adb0fd296bdfcf",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Docs/Research/Electron vs Tauri.md",
+                "file": "TallyLedger - Retail Architecture, Schema & Migration Specification.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Electron vs Tauri"
-            }
-          },
-          {
-            "id": "729fa41572591565",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Docs/Research/Side-by-Side Pipeline Comparison.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "Side-by-Side Pipeline Comparison"
-            }
-          },
-          {
-            "id": "75b785e5f63a1766",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Docs/Research/Selfhosting + tailscale for traffic routes.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "Selfhosting + tailscale for traffic routes"
-            }
-          },
-          {
-            "id": "47c27e2a61fe74cb",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Docs/Research/complete docker-compose.yaml for PowerSync and PostgreSQL configuration.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "complete docker-compose.yaml for PowerSync and PostgreSQL configuration"
-            }
-          },
-          {
-            "id": "709275352fbf9164",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Docs/Research/Selfhosting + tailscale for traffic routes.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "Selfhosting + tailscale for traffic routes"
-            }
-          },
-          {
-            "id": "af9e129a7dfcc707",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Docs/Research/Side-by-Side Pipeline Comparison.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "Side-by-Side Pipeline Comparison"
-            }
-          },
-          {
-            "id": "39ba3b911f4c7d35",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Docs/Research/Side-by-Side Pipeline Comparison.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "Side-by-Side Pipeline Comparison"
-            }
-          },
-          {
-            "id": "56b387595d2d1cc1",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Docs/Research/Electron vs Tauri.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "Electron vs Tauri"
-            }
-          },
-          {
-            "id": "e2a1d408085e8288",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Docs/Decisions and Implementations/supabase-database-implementation.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "supabase-database-implementation"
-            }
-          },
-          {
-            "id": "823ea07c051fd6c1",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Untitled 1.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "Untitled 1"
+              "title": "TallyLedger - Retail Architecture, Schema & Migration Specification"
             }
           }
         ],
-        "currentTab": 13
+        "currentTab": 4
       }
     ],
     "direction": "vertical"
@@ -382,53 +256,53 @@
       "copilot:Open Copilot Chat": false
     }
   },
-  "active": "823ea07c051fd6c1",
+  "active": "4abd618c17983e37",
   "lastOpenFiles": [
-    "release/TallyLedger Setup 0.1.0.exe.blockmap",
-    "release/tallyledger-0.1.0-x64.nsis.7z.tmp",
-    "release/win-unpacked/electron.exe",
-    "release/win-unpacked.tmp.lock",
-    "release/win-unpacked.tmp/locales/vi.pak",
-    "release/win-unpacked.tmp/locales/te.pak",
-    "release/win-unpacked.tmp/locales/ta.pak",
-    "release/win-unpacked.tmp/locales/sw.pak",
-    "release/win-unpacked.tmp/locales/sr.pak",
-    "release/win-unpacked.tmp/locales/sl.pak",
-    "release/win-unpacked.tmp/locales/ro.pak",
+    "Docs/Decisions and Implementations/DB architecture/05_implementation_task_list.md",
+    "Docs/Decisions and Implementations/DB architecture/04_planning_review.md",
+    "Docs/Decisions and Implementations/DB architecture/02_drizzle_schema_extensions.md",
+    "Docs/Decisions and Implementations/DB architecture/01_retail_architecture_and_decisions.md",
+    "Docs/Decisions and Implementations/DB architecture/03_notebook_ingestion_backup_cutover.md",
+    "Docs/Decisions and Implementations/DB architecture/desktop.ini",
+    "Docs/Decisions and Implementations/Untitled/desktop.ini",
+    "Docs/Decisions and Implementations/DB architecture",
+    "Planning review.md",
+    "TallyLedger - Retail Architecture, Schema & Migration Specification.md",
+    "Untitled 5.md",
+    "Docs/Research/Database-restructing/03_migration_and_backups.md",
+    "Docs/Research/Database-restructing/02_drop_in_database_template.md",
+    "Docs/Research/Database-restructing/01_restructuring_architecture.md",
+    "Docs/Research/Database-restructing",
+    "Untitled 4.md",
+    "Untitled 3.md",
+    "Docs/Research/Three architectural DB Approaches/architectural_approaches_workflow.md",
+    "Docs/Research/Three architectural DB Approaches/problem_statement_multi_store_schema_challenge.md",
+    "Docs/Research/Three architectural DB Approaches/technical_implementation_blueprint.md",
+    "Docs/Research/Three architectural DB Approaches",
+    "Untitled 1.md",
+    "dist/assets/index-IDKJOBrW.js",
+    "dist/app-icon.png",
+    "dist/favicon.ico",
+    "dist/src/assets/brand-mark.png",
+    "dist/src/assets",
+    "dist/src",
+    "dist/assets/brand-mark-BE4daNCm.png",
+    "dist/assets/index-__VufgVF.css",
+    "src/assets/brand-mark.png",
+    "public/app-icon.png",
+    "public/brand-mark.png",
+    "node_modules/pkijs/README.md",
+    "node_modules/aws4/README.md",
+    "node_modules/lru-cache/README.md",
+    "node_modules/hosted-git-info/README.md",
+    "node_modules/lodash.escaperegexp/README.md",
     "node_modules/isarray/README.md",
     "node_modules/duplexer2/README.md",
     "node_modules/duplexer2/LICENSE.md",
     "node_modules/signal-exit/README.md",
-    "node_modules/quick-lru/readme.md",
-    "node_modules/mimic-response/readme.md",
-    "node_modules/wrappy/README.md",
-    "node_modules/once/README.md",
-    "node_modules/cacheable-lookup/README.md",
-    "node_modules/p-cancelable/readme.md",
-    "node_modules/which/README.md",
-    "node_modules/json-schema-traverse/README.md",
-    "node_modules/chalk/readme.md",
-    "node_modules/tiny-typed-emitter/README.md",
-    "node_modules/lodash.isequal/README.md",
-    "node_modules/combined-stream/Readme.md",
-    "node_modules/form-data/README.md",
-    "node_modules/form-data/CHANGELOG.md",
-    "node_modules/core-util-is/README.md",
-    "node_modules/clone-response/README.md",
-    "node_modules/cacheable-request/README.md",
-    "node_modules/color-convert/README.md",
-    "node_modules/color-convert/CHANGELOG.md",
-    "node_modules/path-key/readme.md",
-    "node_modules/defer-to-connect/README.md",
     "node_modules/promise-retry/node_modules/retry/equation.gif",
     "node_modules/proper-lockfile/node_modules/retry/equation.gif",
     "node_modules/app-builder-lib/templates/icons/proton-native/linux/64x64.png",
-    "node_modules/app-builder-lib/templates/icons/proton-native/linux/512x512.png",
-    "node_modules/app-builder-lib/templates/icons/proton-native/linux/48x48.png",
-    "node_modules/app-builder-lib/templates/icons/proton-native/linux/32x32.png",
-    "node_modules/app-builder-lib/templates/icons/proton-native/linux/256x256.png",
-    "node_modules/app-builder-lib/templates/icons/proton-native/linux/16x16.png",
-    "node_modules/app-builder-lib/templates/icons/proton-native/linux/128x128.png",
-    "node_modules/app-builder-lib/templates/icons/proton-native/linux/1024x1024.png"
+    "node_modules/app-builder-lib/templates/icons/proton-native/linux/512x512.png"
   ]
 }

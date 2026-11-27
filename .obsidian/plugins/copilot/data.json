@@ -4638,6 +4638,33 @@
       },
       "configuredModelId": "eb7ebcae-f5ad-438c-a75f-36fbd13fe1b6",
       "configuredAt": 1795657323115
+    },
+    {
+      "providerId": "6dd9cc3b-26a0-4546-aa1a-077125b3836d",
+      "info": {
+        "id": "openrouter/moonshotai/kimi-k2",
+        "displayName": "openrouter/Kimi K2 0711"
+      },
+      "configuredModelId": "1d5ccbe4-26d3-4cc0-8956-99cf19cac788",
+      "configuredAt": 1795749317233
+    },
+    {
+      "providerId": "6dd9cc3b-26a0-4546-aa1a-077125b3836d",
+      "info": {
+        "id": "openrouter/moonshotai/kimi-k2-0905",
+        "displayName": "openrouter/Kimi K2 Instruct 0905"
+      },
+      "configuredModelId": "6ffe8139-808d-4055-b24e-f70a2267eb05",
+      "configuredAt": 1795749317234
+    },
+    {
+      "providerId": "6dd9cc3b-26a0-4546-aa1a-077125b3836d",
+      "info": {
+        "id": "openrouter/inclusionai/lingsante-3.1-air-vl",
+        "displayName": "openrouter/LingSante 3.1 Air VL"
+      },
+      "configuredModelId": "26e8acf8-9a31-4681-8c88-6c67300b4939",
+      "configuredAt": 1795749317235
     }
   ],
   "backends": {

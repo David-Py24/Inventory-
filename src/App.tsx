@@ -4,6 +4,7 @@ import {
   AccountRecord,
   GoalItem,
   InventoryItem,
+  LandingSection,
   MonthlyCashFlow,
   PageRoute,
   SaleRecord,
@@ -16,6 +17,12 @@ import {
 } from './types';
 import { api, AuthMode, getAuthMode, getAuthToken, setAuthModeStorage, setAuthToken } from './api/client';
 import { setActiveCurrency } from './utils/format';
+import {
+  buildLandingHash,
+  isLandingWindowQuery,
+  openLandingWindow,
+  parseLandingHash,
+} from './utils/landingWindow';
 import { Sidebar } from './components/Sidebar';
 import { ConnectivityToast } from './components/ConnectivityToast';
 import { useOnlineStatus } from './hooks/useOnline';
@@ -29,6 +36,7 @@ import { AccountsPage } from './pages/AccountsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AuthPage } from './pages/AuthPage';
+import { LandingPage } from './pages/LandingPage';
 
 const DEFAULT_SETTINGS: WorkspaceSettings = {
   storeName: 'TallyLedger',
@@ -93,6 +101,11 @@ export default function App() {
   const [authMode, setAuthMode] = useState<AuthMode>(() => getAuthMode());
   const [booting, setBooting] = useState<boolean>(() => Boolean(getAuthToken()));
   const [route, setRoute] = useState<PageRoute>(() => parseHashRoute());
+  const [landingSection, setLandingSection] = useState<LandingSection | null>(() => {
+    const fromHash = parseLandingHash(window.location.hash);
+    if (fromHash) return fromHash;
+    return isLandingWindowQuery() ? 'overview' : null;
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isOnline = useOnlineStatus();
 
@@ -151,13 +164,28 @@ export default function App() {
   }, [loadWorkspaceFromBackend]);
 
   useEffect(() => {
-    document.title = `${state.settings.storeName} — ${state.settings.workspaceSubtitle}`;
-  }, [state.settings.storeName, state.settings.workspaceSubtitle]);
+    document.title =
+      landingSection !== null
+        ? `${state.settings.storeName} — Overview & Documentation`
+        : `${state.settings.storeName} — ${state.settings.workspaceSubtitle}`;
+  }, [landingSection, state.settings.storeName, state.settings.workspaceSubtitle]);
 
-  // Auth gate on hash routing: AuthPage (#/login) is strictly locked behind logging off
+  // Auth gate on hash routing: AuthPage (#/login) is strictly locked behind logging off,
+  // while LandingPage (#/landing or ?window=landing) remains accessible in its own view/window.
   useEffect(() => {
     if (booting) return;
     const syncFromHash = () => {
+      const nextLanding = parseLandingHash(window.location.hash);
+      if (nextLanding) {
+        setLandingSection(nextLanding);
+        return;
+      }
+      if (isLandingWindowQuery() && window.location.hash === '') {
+        setLandingSection('overview');
+        window.location.hash = '#/landing';
+        return;
+      }
+      setLandingSection(null);
       const rawHash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
       if (!isAuthenticated) {
         if (rawHash !== 'login') {
@@ -423,11 +451,80 @@ export default function App() {
     });
   };
 
+  const clearWindowQueryIfPresent = () => {
+    if (window.location.search) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  };
+
+  const handleEnterWorkspaceFromLanding = () => {
+    clearWindowQueryIfPresent();
+    setLandingSection(null);
+    setRoute('dashboard');
+    window.location.hash = '#/dashboard';
+  };
+
+  const handleOpenLoginFromLanding = () => {
+    clearWindowQueryIfPresent();
+    setLandingSection(null);
+    window.location.hash = '#/login';
+  };
+
+  const handleDownloadStarterBundle = () => {
+    const starterBundle = {
+      exportedAt: new Date().toISOString(),
+      accounts: state.accounts,
+      inventory: state.inventory,
+      sales: state.sales,
+      bills: state.bills,
+      sinkingFunds: state.sinkingFunds,
+      goals: state.goals,
+      transactions: state.transactions,
+      monthlyCashFlow: state.monthlyCashFlow,
+      settings: state.settings,
+    };
+    const blob = new Blob([JSON.stringify(starterBundle, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${state.settings.storeName.toLowerCase().replace(/\s+/g, '-')}-workspace-starter.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (booting) {
     return (
       <div className="min-h-screen bg-[#1F221B] text-[#F5F2EB] flex items-center justify-center text-sm tracking-wide">
         Loading workspace…
       </div>
+    );
+  }
+
+  if (landingSection !== null) {
+    return (
+      <MotionConfig reducedMotion="user">
+        <AnimatePresence mode="wait" initial>
+          <PageTransition key="landing">
+            <LandingPage
+              storeName={state.settings.storeName}
+              workspaceSubtitle={state.settings.workspaceSubtitle}
+              isAuthenticated={isAuthenticated}
+              initialSection={landingSection}
+              onChangeSection={(nextSection) => {
+                setLandingSection(nextSection);
+                window.location.hash = buildLandingHash(nextSection);
+              }}
+              onEnterWorkspace={handleEnterWorkspaceFromLanding}
+              onOpenLogin={handleOpenLoginFromLanding}
+              onDownloadStarterBundle={handleDownloadStarterBundle}
+            />
+          </PageTransition>
+        </AnimatePresence>
+      </MotionConfig>
     );
   }
 
@@ -442,6 +539,7 @@ export default function App() {
               workspaceSubtitle={state.settings.workspaceSubtitle}
               initialAuthMode={authMode}
               isOnline={isOnline}
+              onOpenLanding={() => openLandingWindow('overview')}
               onLogin={handleLogin}
               onSignUp={handleSignUp}
             />
@@ -459,6 +557,7 @@ export default function App() {
           activeRoute={route}
           onNavigate={navigate}
           onResetDemoData={handleRefreshFromBackend}
+          onOpenLanding={() => openLandingWindow('overview')}
           storeName={state.settings.storeName}
           workspaceSubtitle={state.settings.workspaceSubtitle}
           authMode={authMode}

@@ -9,10 +9,11 @@ try {
 }
 
 const developmentUrl = process.env.ELECTRON_RENDERER_URL || 'http://localhost:8080';
+const appRoot = app.isPackaged ? app.getAppPath() : path.resolve(__dirname, '..');
 
-// Keep Chromium caches in a writable temp location to avoid permission errors.
+// Electron only accepts documented app path names here. Its cache path is
+// writable under the system temp directory; GPU cache is Chromium-managed.
 app.setPath('cache', path.join(app.getPath('temp'), 'tallyledger-cache'));
-app.setPath('gpuCache', path.join(app.getPath('temp'), 'tallyledger-gpu-cache'));
 
 function createWindow() {
   const window = new BrowserWindow({
@@ -20,6 +21,7 @@ function createWindow() {
     height: 800,
     minWidth: 960,
     minHeight: 640,
+    icon: path.join(appRoot, app.isPackaged ? 'dist/app-icon.png' : 'public/app-icon.png'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -28,11 +30,11 @@ function createWindow() {
   });
 
   if (app.isPackaged) {
-    window.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
+    window.loadFile(path.join(appRoot, 'dist', 'index.html'));
   } else if (process.env.ELECTRON_RENDERER_URL) {
     window.loadURL(developmentUrl);
   } else {
-    window.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
+    window.loadFile(path.join(appRoot, 'dist', 'index.html'));
   }
 
   return window;
@@ -42,8 +44,11 @@ app.whenReady().then(() => {
   createWindow();
 
   if (app.isPackaged && autoUpdater) {
-    autoUpdater.checkForUpdatesAndNotify().catch(() => {
-      // ignore update check failures
+    autoUpdater.on('error', (error) => {
+      console.error('[updater] Update check failed:', error);
+    });
+    autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+      console.error('[updater] Update check failed:', error);
     });
   }
 

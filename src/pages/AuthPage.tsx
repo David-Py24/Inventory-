@@ -8,6 +8,7 @@ interface AuthPageProps {
   workspaceSubtitle: string;
   initialAuthMode?: AuthMode;
   isOnline?: boolean;
+  onOpenLanding?: () => void;
   onLogin: (
     identifier: string,
     password: string,
@@ -30,6 +31,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   workspaceSubtitle,
   initialAuthMode = 'offline',
   isOnline = true,
+  onOpenLanding,
   onLogin,
   onSignUp,
 }) => {
@@ -477,6 +479,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           <span>{storeName}</span>
           <span>Account Access</span>
           <span>Local Workspace</span>
+          {onOpenLanding && (
+            <button
+              type="button"
+              onClick={onOpenLanding}
+              className="text-[#C6A270] hover:text-[#F5F2EB] transition-colors tracking-[0.16em] uppercase"
+            >
+              Overview &amp; Docs ↗
+            </button>
+          )}
         </div>
         <span className="font-serif text-[13px] tracking-normal normal-case text-[#7E8276]">
           {storeName}.

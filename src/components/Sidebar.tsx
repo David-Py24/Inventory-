@@ -2,6 +2,7 @@ import React from 'react';
 import {
   BarChart3,
   Cloud,
+  ExternalLink,
   HardDrive,
   Home,
   Landmark,
@@ -18,6 +19,7 @@ interface SidebarProps {
   activeRoute: PageRoute;
   onNavigate: (route: PageRoute) => void;
   onResetDemoData: () => void;
+  onOpenLanding?: () => void;
   storeName?: string;
   workspaceSubtitle?: string;
   authMode?: AuthMode;
@@ -39,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeRoute,
   onNavigate,
   onResetDemoData,
+  onOpenLanding,
   storeName = 'TallyLedger',
   workspaceSubtitle = 'Financial Command Center',
   authMode = 'offline',
@@ -145,6 +148,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 : 'Offline · Local DB'}
           </span>
         </div>
+        {onOpenLanding && (
+          <button
+            type="button"
+            onClick={() => {
+              onOpenLanding();
+              onCloseMobile();
+            }}
+            className="flex w-full items-center justify-between gap-3 rounded-lg px-3.5 py-2.5 text-[13px] font-medium text-[#B9B9AE] hover:bg-white/[0.06] hover:text-[#FAF8F3] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B89260]"
+          >
+            <span className="flex items-center gap-3">
+              <ExternalLink className="h-4 w-4 shrink-0 text-[#97998E]" />
+              <span>Landing &amp; Docs</span>
+            </span>
+          </button>
+        )}
         <button
           type="button"
           onClick={onResetDemoData}

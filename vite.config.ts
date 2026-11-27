@@ -4,8 +4,15 @@ import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  const isElectronPreview = process.env.ELECTRON_PREVIEW === 'true';
   return {
+    // Electron loads the packaged renderer from file://, so its assets must
+    // resolve relative to the packaged index.html. Web builds stay root-based.
+    base: mode === 'desktop' ? './' : '/',
+    cacheDir: isElectronPreview
+      ? path.resolve(__dirname, 'node_modules/.vite-electron-preview')
+      : undefined,
     plugins: [
       react(),
       tailwindcss(),
@@ -31,7 +38,9 @@ export default defineConfig(() => {
       },
     },
     server: {
-      hmr: process.env.DISABLE_HMR !== 'true',
+      hmr: isElectronPreview
+        ? { port: 24679 }
+        : process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };

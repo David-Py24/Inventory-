@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-26  
 **Related decision:** [`standalone-desktop-decision.md`](../Decisions%20and%20Implementations/standalone-desktop-decision.md)  
-**Status:** Phase 2 shell implemented; runtime verification pending.
+**Status:** Electron preview and Windows packaging workflow implemented; installer runtime verification pending.
 
 ## Goal
 
@@ -54,6 +54,15 @@ Add an Electron desktop distribution that reuses the existing React application 
 5. Add generated desktop artifacts and build intermediates to `.gitignore` as appropriate, without ignoring source/configuration.
 
 **Exit condition:** Web commands remain unchanged in purpose, and desktop artifacts can be built through an independent command.
+
+### Phase 3 implementation notes — 2026-11-26
+
+- Added `npm run desktop:preview`, which starts the existing dev server, waits for its HTTP endpoint, opens Electron against it, and stops the server when the preview closes. This keeps app development independent from installer work.
+- Added `npm run desktop:build` for a Windows NSIS build with publish disabled. Desktop renderer builds use Vite's relative asset base; regular web builds retain the root asset base.
+- Set a predictable NSIS artifact name and interactive per-user install options. Removed the unused server bundle from desktop packaging.
+- Updater check failures now write to stderr instead of being silently swallowed. Update delivery still needs a configured GitHub repository/release and a packaged-app smoke check.
+- Verification: `npm run build` succeeded. `npm run desktop:build` built the renderer and started electron-builder, but could not finish because the environment cannot resolve `github.com` to download a Windows packaging dependency. No installer was produced or clean-machine install tested.
+- Follow-up from installed-app screenshot: removed `app.setPath('gpuCache', ...)`, which Electron rejects as an unsupported app path and which caused the observed main-process startup exception. `node --check electron/main.cjs` passed. A rebuilt installer could not be produced in this environment because the same GitHub download is blocked; the fix still needs an install/launch smoke check.
 
 ## Phase 4 — Resolve routing and asset compatibility
 
