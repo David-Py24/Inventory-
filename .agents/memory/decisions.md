@@ -1,5 +1,12 @@
 # Decision records
 
+## 2026-11-27 — Expose the Vite app and backup API on Vercel
+
+- **Decision:** Route `/api/*` to the backup API service and all remaining public paths to the static Vite app in the Vercel Services deployment.
+- **Reason:** Services are private unless exposed by top-level rewrites; the supplied successful build had no route for the app service.
+- **Consequences:** After redeploying this config, the website shell will be reachable on the deployment domain. Workspace/auth routes still require a hosted persistent backend; Vercel currently hosts only the token-protected cloud backup API. Verify runtime requests after redeploying.
+- **Status:** Active for the Vercel deployment
+
 ## 2026-11-27 — Keep desktop cloud backup manual and append-only
 
 - **Decision:** Upload a reviewed local SQLite snapshot to the configured cloud workspace only after explicit confirmation. Keep snapshots append-only and do not enable background synchronization. The hosted backup API uses a manually provisioned long token; Supabase credentials remain server-side.

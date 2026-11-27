@@ -10,7 +10,8 @@
     "api": {
       "root": ".",
       "framework": "express",
-      "entrypoint": "server/index.ts"
+      "entrypoint": "server/index.ts",
+      "buildCommand": "npm run build:vercel-api"
     }
   },
   "rewrites": [
@@ -18,6 +19,12 @@
       "source": "/api/(.*)",
       "destination": {
         "service": "api"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "app"
       }
     }
   ]
