@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Cloud, CloudDownload, CloudUpload, Download, RotateCcw, Upload } from 'lucide-react';
+import { Check, Cloud, CloudUpload, Download, RotateCcw, Upload } from 'lucide-react';
 import { BusinessType, CurrencyCode, InventoryFieldKey, SalesFieldKey, ShortcutAction, TimeframeKey, WorkspaceSettings } from '../types';
-import { api } from '../api/client';
+import { api, type WorkspaceSnapshot } from '../api/client';
 import { CURRENCY_OPTIONS } from '../utils/format';
 import {
   DEFAULT_INVENTORY_COLUMN_LABELS,
@@ -45,13 +45,23 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     message: string;
   } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
-  const [backupStatus, setBackupStatus] = useState<{
-    lastBackupAt: string | null;
-    lastRestoreAt: string | null;
-    supabaseConfigured: boolean;
-    supabaseReachable?: boolean;
+  const [cloudBusy, setCloudBusy] = useState<'push' | null>(null);
+  const [backupPreview, setBackupPreview] = useState<{
+    snapshot: WorkspaceSnapshot;
+    localCounts: Record<string, number>;
+    cloudCounts: Record<string, number>;
+    cloudHasData: boolean;
+    backedUpAt: string | null;
   } | null>(null);
-  const [cloudBusy, setCloudBusy] = useState<'push' | 'pull' | null>(null);
+  const [cloudApiUrl, setCloudApiUrl] = useState(() => {
+    try {
+      return localStorage.getItem('tallyledger_cloud_backup_api_url') || import.meta.env.VITE_CLOUD_BACKUP_API_URL || '';
+    } catch {
+      return import.meta.env.VITE_CLOUD_BACKUP_API_URL || '';
+    }
+  });
+  const [cloudAccessToken, setCloudAccessToken] = useState('');
+  const [lastCloudBackupAt, setLastCloudBackupAt] = useState<string | null>(null);
   const [cloudNotice, setCloudNotice] = useState<{
     type: 'success' | 'error';
     message: string;
@@ -59,27 +69,45 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    api
-      .getBackupStatus(true)
-      .then((res) => setBackupStatus(res))
-      .catch(() => {
-        // ignore if offline or unauthenticated
-      });
-  }, []);
+    try {
+      localStorage.setItem('tallyledger_cloud_backup_api_url', cloudApiUrl.trim());
+    } catch {
+      // URL is non-secret; keeping it is optional.
+    }
+  }, [cloudApiUrl]);
 
   const handleCloudBackup = async () => {
     setCloudBusy('push');
     setCloudNotice(null);
     try {
-      const res = await api.pushCloudBackup();
-      setBackupStatus((prev) =>
-        prev
-          ? { ...prev, lastBackupAt: res.backedUpAt, supabaseReachable: true }
-          : { lastBackupAt: res.backedUpAt, lastRestoreAt: null, supabaseConfigured: true, supabaseReachable: true }
-      );
+      if (!/^https:\/\//i.test(cloudApiUrl) && !/^http:\/\/localhost(?::\d+)?$/i.test(cloudApiUrl)) {
+        throw new Error('Enter the hosted HTTPS backup API URL.');
+      }
+      if (!cloudAccessToken.trim()) throw new Error('Enter the backup access token provided by the administrator.');
+      const local = await api.getLocalBackupSnapshot();
+      const cloud = await api.previewHostedCloudBackup(cloudApiUrl, cloudAccessToken.trim());
+      setBackupPreview({ snapshot: local.snapshot, localCounts: local.counts, ...cloud });
+      setLastCloudBackupAt(cloud.backedUpAt);
+    } catch (err) {
+      setCloudNotice({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Could not preview cloud backup.',
+      });
+    } finally {
+      setCloudBusy(null);
+    }
+  };
+
+  const confirmCloudBackup = async () => {
+    setCloudBusy('push');
+    setCloudNotice(null);
+    try {
+      if (!backupPreview) throw new Error('Review the local and cloud counts before uploading.');
+      const res = await api.uploadHostedCloudBackup(cloudApiUrl, cloudAccessToken.trim(), backupPreview.snapshot);
+      setLastCloudBackupAt(res.backedUpAt);
       setCloudNotice({
         type: 'success',
-        message: 'Local SQLite data backed up to Supabase PostgreSQL.',
+        message: 'Cloud backup completed. Local data remains stored on this device.',
       });
     } catch (err) {
       setCloudNotice({
@@ -88,31 +116,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       });
     } finally {
       setCloudBusy(null);
-    }
-  };
-
-  const handleCloudRestore = async () => {
-    setCloudBusy('pull');
-    setCloudNotice(null);
-    try {
-      const res = await api.pullCloudRestore();
-      setBackupStatus((prev) =>
-        prev
-          ? { ...prev, lastRestoreAt: res.restoredAt, supabaseReachable: true }
-          : { lastBackupAt: null, lastRestoreAt: res.restoredAt, supabaseConfigured: true, supabaseReachable: true }
-      );
-      onResetAll();
-      setCloudNotice({
-        type: 'success',
-        message: 'Restored local SQLite database from Supabase PostgreSQL.',
-      });
-    } catch (err) {
-      setCloudNotice({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Cloud restore failed.',
-      });
-    } finally {
-      setCloudBusy(null);
+      setBackupPreview(null);
     }
   };
 
@@ -650,54 +654,33 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   <div>
                     <h3 className="text-[14px] font-semibold text-[#23281E] flex items-center gap-2">
                       <Cloud className="h-4 w-4 text-[#6E7166]" />
-                      <span>Online backup (Supabase PostgreSQL)</span>
+                  <span>Manual cloud backup</span>
                     </h3>
                     <p className="mt-0.5 text-[12.5px] text-[#6E7166]">
-                      Your workspace runs offline-first on local SQLite. Back up to or restore from
-                      Supabase when online.
+                      Your workspace stays on this device. Review a snapshot and upload it to the
+                      assigned cloud workspace when you choose.
                     </p>
                   </div>
-                  {backupStatus && (
-                    <span
-                     className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                         isOnline && backupStatus.supabaseReachable
-                           ? 'bg-[#EEF6EF] text-[#2E5A36]'
-                           : 'bg-[#F5F1E8] text-[#6E7166]'
-                       }`}
-                     >
-                       {!backupStatus.supabaseConfigured
-                         ? 'Supabase not configured'
-                         : isOnline && backupStatus.supabaseReachable
-                           ? 'Supabase reachable'
-                           : 'Supabase unreachable'}
-                     </span>
-                  )}
                 </div>
 
-                {backupStatus && (
-                  <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px] text-[#6E7166]">
-                    <div>
-                      Last backup:{' '}
-                      <span className="font-medium text-[#23281E]">
-                        {backupStatus.lastBackupAt
-                          ? new Date(backupStatus.lastBackupAt).toLocaleString()
-                          : 'Never'}
-                      </span>
-                    </div>
-                    <div>
-                      Last restore:{' '}
-                      <span className="font-medium text-[#23281E]">
-                        {backupStatus.lastRestoreAt
-                          ? new Date(backupStatus.lastRestoreAt).toLocaleString()
-                          : 'Never'}
-                      </span>
-                    </div>
-                  </div>
-                )}
+                <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                  <label className="text-[12px] font-medium text-[#6E7166]">
+                    Hosted backup API URL
+                    <input value={cloudApiUrl} onChange={(event) => { setCloudApiUrl(event.target.value); setBackupPreview(null); }} placeholder="https://your-project.vercel.app" spellCheck={false} autoComplete="url" className="mt-1 w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] text-[#23281E] outline-none focus:border-[#9E825E]" />
+                  </label>
+                  <label className="text-[12px] font-medium text-[#6E7166]">
+                    Backup access token
+                    <input type="password" value={cloudAccessToken} onChange={(event) => { setCloudAccessToken(event.target.value); setBackupPreview(null); }} placeholder="Provided by the administrator" autoComplete="new-password" className="mt-1 w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] text-[#23281E] outline-none focus:border-[#9E825E]" />
+                    <span className="mt-1 block text-[10.5px] font-normal">Token is kept in memory only while this page is open.</span>
+                  </label>
+                </div>
+                <p className="mb-3 text-[12px] text-[#6E7166]">
+                  Last cloud backup: <span className="font-medium text-[#23281E]">{lastCloudBackupAt ? new Date(lastCloudBackupAt).toLocaleString() : 'Not checked yet'}</span>
+                </p>
 
                 {!isOnline && (
                   <p className="mb-3 text-[11.5px] text-[#9B3B2B]">
-                    You are offline. Cloud backup sync is temporarily disabled until you reconnect.
+                  You are offline. Cloud backup is unavailable until you reconnect.
                   </p>
                 )}
                 <div className="flex flex-wrap items-center gap-2.5">
@@ -709,19 +692,46 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     className="inline-flex items-center gap-2 rounded-lg bg-[#2C3327] px-3.5 py-2 text-[12.5px] font-medium text-[#FCFBF8] hover:bg-[#3A4333] disabled:opacity-50 transition-colors"
                   >
                     <CloudUpload className="h-3.5 w-3.5" />
-                    <span>{cloudBusy === 'push' ? 'Backing up…' : 'Back up to cloud'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={cloudBusy !== null || !isOnline}
-                    onClick={handleCloudRestore}
-                    title={!isOnline ? 'No internet connection. Cloud restore disabled.' : undefined}
-                    className="inline-flex items-center gap-2 rounded-lg border border-[#DDD6C7] bg-[#F8F5EE] px-3.5 py-2 text-[12.5px] font-medium text-[#2C3327] hover:bg-[#EFE9DC] disabled:opacity-50 transition-colors"
-                  >
-                    <CloudDownload className="h-3.5 w-3.5" />
-                    <span>{cloudBusy === 'pull' ? 'Restoring…' : 'Restore from cloud'}</span>
+                    <span>{cloudBusy === 'push' ? 'Reviewing…' : 'Review cloud backup'}</span>
                   </button>
                 </div>
+
+                {backupPreview && (
+                  <div className="mt-4 rounded-lg border border-[#D8C8A9] bg-[#F8F5EE] p-4">
+                    <h4 className="text-[13px] font-semibold text-[#23281E]">Review cloud backup</h4>
+                    <p className="mt-1 text-[12px] leading-5 text-[#6E7166]">
+                      This creates a new cloud snapshot and retains earlier snapshots. It includes
+                      local user records and password hashes, along with workspace financial and
+                      inventory data. It does not modify local data or enable automatic sync.
+                    </p>
+                    {backupPreview.cloudHasData && (
+                      <p className="mt-2 text-[12px] font-medium text-[#9B3B2B]">
+                        Previous cloud snapshots exist and will be retained.
+                      </p>
+                    )}
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-[11.5px] text-[#6E7166] sm:grid-cols-3">
+                      {Object.entries(backupPreview.localCounts).map(([key, count]) => (
+                        <div key={key} className="rounded border border-[#E6E0D3] bg-white px-2.5 py-2">
+                          <span className="block capitalize">{key.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`)}</span>
+                          <span className="font-semibold text-[#23281E]">Local {count} · Cloud {backupPreview.cloudCounts[key] ?? 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setBackupPreview(null)}
+                        className="rounded-lg border border-[#DDD6C7] px-3 py-2 text-[12px] text-[#2C3327] hover:bg-white"
+                      >Cancel</button>
+                      <button
+                        type="button"
+                        disabled={cloudBusy !== null || !isOnline}
+                        onClick={confirmCloudBackup}
+                        className="rounded-lg bg-[#2C3327] px-3 py-2 text-[12px] font-medium text-white hover:bg-[#3A4333] disabled:opacity-50"
+                      >{cloudBusy === 'push' ? 'Backing up…' : 'Confirm and back up'}</button>
+                    </div>
+                  </div>
+                )}
 
                 {cloudNotice && (
                   <div

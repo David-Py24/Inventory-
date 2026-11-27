@@ -18,6 +18,31 @@ const TOKEN_STORAGE_KEY = 'tallyledger_auth_token';
 const AUTH_MODE_STORAGE_KEY = 'tallyledger_auth_mode';
 
 export type AuthMode = 'offline' | 'online';
+export type WorkspaceSnapshot = Record<string, Record<string, unknown>[]>;
+
+async function hostedBackupRequest<T>(
+  apiUrl: string,
+  accessToken: string,
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
+  const headers = new Headers(init.headers);
+  headers.set('Authorization', `Bearer ${accessToken}`);
+  if (init.body !== undefined) headers.set('Content-Type', 'application/json');
+  const baseUrl = apiUrl.trim().replace(/\/+$/, '');
+  const response = await fetch(`${baseUrl}/api/backup/cloud${path}`, { ...init, headers });
+  if (!response.ok) {
+    let message = `Cloud backup request failed (${response.status})`;
+    try {
+      const body = (await response.json()) as { error?: string };
+      if (body.error) message = body.error;
+    } catch {
+      // Keep the HTTP status message when the service returns a non-JSON response.
+    }
+    throw new Error(message);
+  }
+  return (await response.json()) as T;
+}
 
 export function getAuthMode(): AuthMode {
   try {
@@ -239,26 +264,25 @@ export const api = {
       method: 'DELETE',
     }),
 
-  // Cloud Backup & Restore (Local SQLite <-> Supabase PostgreSQL)
-  getBackupStatus: (check = false) =>
-    request<{
-      mode: 'sqlite';
-      dbPath: string;
-      lastBackupAt: string | null;
-      lastRestoreAt: string | null;
-      supabaseConfigured: boolean;
-      supabaseReachable?: boolean;
-    }>(`/api/backup/status${check ? '?check=true' : ''}`),
+  // Manual desktop SQLite snapshot transfer to the hosted backup service.
+  getLocalBackupSnapshot: () =>
+    request<{ snapshot: WorkspaceSnapshot; counts: Record<string, number> }>('/api/backup/snapshot'),
 
-  pushCloudBackup: () =>
-    request<{ ok: boolean; backedUpAt: string; counts: Record<string, number> }>(
-      '/api/backup/push',
-      { method: 'POST' }
-    ),
+  previewHostedCloudBackup: (apiUrl: string, accessToken: string) =>
+    hostedBackupRequest<{
+      cloudCounts: Record<string, number>;
+      backedUpAt: string | null;
+      cloudHasData: boolean;
+    }>(apiUrl, accessToken, '/preview'),
 
-  pullCloudRestore: () =>
-    request<{ ok: boolean; restoredAt: string; counts: Record<string, number> }>(
-      '/api/backup/pull',
-      { method: 'POST' }
-    ),
+  uploadHostedCloudBackup: (apiUrl: string, accessToken: string, snapshot: WorkspaceSnapshot) =>
+    hostedBackupRequest<{
+      ok: boolean;
+      backedUpAt: string;
+      counts: Record<string, number>;
+    }>(apiUrl, accessToken, '/snapshot', {
+      method: 'POST',
+      body: JSON.stringify({ confirmLocalToCloud: true, snapshot }),
+    }),
+
 };

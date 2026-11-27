@@ -204,3 +204,11 @@ export const sales = pgTable('sales', {
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const workspaceBackupSnapshots = pgTable('workspace_backup_snapshots', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: text('workspace_id').notNull(),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+  counts: jsonb('counts').$type<Record<string, number>>().notNull(),
+  backedUpAt: timestamp('backed_up_at', { withTimezone: true }).notNull().defaultNow(),
+});

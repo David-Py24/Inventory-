@@ -1,19 +1,20 @@
 import 'dotenv/config';
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createApp } from './server/app.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-async function startServer() {
+export async function startServer(options: { port?: number; host?: string } = {}) {
   const app = createApp();
-  const PORT = Number(process.env.PORT) || 8080;
+  const PORT = options.port ?? (Number(process.env.PORT) || 8080);
+  const HOST = options.host ?? '0.0.0.0';
 
   const isDev = process.argv.includes('--dev');
 
   if (isDev) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -27,12 +28,19 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  const server = await new Promise<import('node:http').Server>((resolve, reject) => {
+    const listener = app.listen(PORT, HOST, () => resolve(listener));
+    listener.once('error', reject);
   });
+  const address = server.address();
+  const port = typeof address === 'object' && address ? address.port : PORT;
+  console.log(`Server running on http://${HOST}:${port}`);
+  return server;
 }
 
-startServer().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  startServer().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

@@ -15,6 +15,7 @@ import {
   utangTransactions,
 } from './schema.js';
 import { HttpError } from '../middleware/errorHandler.js';
+import { BACKUP_TABLES } from './backupTables.js';
 
 function logCloudFailure(operation: string, error: unknown): void {
   const errorName = error instanceof Error ? error.name : 'UnknownError';
@@ -34,6 +35,35 @@ export async function isCloudReachable(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function previewSqliteCloudBackup() {
+  if (!isSupabaseDatabaseConfigured()) {
+    throw new HttpError(503, 'SUPABASE_DATABASE_URL is not configured for online backups');
+  }
+
+  const local: Record<string, number> = {};
+  for (const [key, table] of Object.entries(BACKUP_TABLES)) {
+    local[key] = Number(
+      (sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number }).count
+    );
+  }
+
+  const { client } = getSupabaseConnection();
+  const cloud = await Promise.all(
+    Object.entries(BACKUP_TABLES).map(async ([key, table]) => {
+      const rows = await client.unsafe(`SELECT COUNT(*)::int AS count FROM ${table}`);
+      return [key, Number(rows[0]?.count ?? 0)] as const;
+    })
+  );
+  const cloudCounts = Object.fromEntries(cloud);
+
+  return {
+    localCounts: local,
+    cloudCounts,
+    cloudHasData: Object.values(cloudCounts).some((count) => count > 0),
+    behavior: 'merge-upsert',
+  } as const;
 }
 
 export async function upsertLocalUserToCloud(localUser: {

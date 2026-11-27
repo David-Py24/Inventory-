@@ -1,5 +1,26 @@
 # Decision records
 
+## 2026-11-27 — Keep desktop cloud backup manual and append-only
+
+- **Decision:** Upload a reviewed local SQLite snapshot to the configured cloud workspace only after explicit confirmation. Keep snapshots append-only and do not enable background synchronization. The hosted backup API uses a manually provisioned long token; Supabase credentials remain server-side.
+- **Reason:** Desktop accounts are local and are not cloud identities yet. A reviewed, append-only snapshot avoids merging with unrelated rows or losing prior cloud copies.
+- **Consequences:** Configure the hosted API URL in the desktop and provision its token/workspace ID on Vercel. Replace this one-client credential model with per-user/workspace authorization before broader use.
+- **Status:** Active for the prototype
+
+## 2026-11-27 — Use the Supabase-specific Drizzle config for cloud migrations
+
+- **Decision:** Apply Supabase migrations with `npm run db:migrate:supabase`, which explicitly loads `drizzle.supabase.config.ts`; keep `db:migrate` for the `DATABASE_URL` target.
+- **Reason:** The workspace has separate general and Supabase database URLs, and the default Drizzle command does not infer the cloud target.
+- **Consequences:** Check the selected database target before applying migrations; use the explicit Supabase script for cloud schema changes.
+- **Status:** Active
+
+## 2026-11-27 — Bundle the local API runtime with desktop builds
+
+- **Decision:** Electron builds without an external renderer URL start the Express API in-process and serve the built UI from a loopback-only ephemeral port. Keep operational data in SQLite under Electron's per-user app data directory.
+- **Reason:** Offline signup and workspace requests use the local API; a file-loaded renderer has no API server to receive them.
+- **Consequences:** Include the generated `server.js` bundle in the desktop package. Hosted backup/sync is a separate later milestone.
+- **Status:** Active for offline desktop prototyping
+
 Add newest decisions at the top using the template. Mark a decision superseded when it changes; preserve the earlier rationale for traceability.
 
 ## 2026-11-27 — Keep retail workspace operations SQLite-first

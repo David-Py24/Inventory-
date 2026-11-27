@@ -10,6 +10,21 @@ Last reviewed: 2026-11-25
 
 # Inventory Documentation & Progress Log
 
+## 2026-11-27 — Build the manual desktop-to-cloud snapshot path
+
+- The desktop can package local SQLite tables into a preview, compare local counts with the hosted workspace's latest snapshot, and upload after a second confirmation. Uploads create append-only snapshots; earlier cloud copies are retained. The Vercel API uses a backup-only Express app, requires a server token of at least 32 characters, selects the workspace from server configuration, validates snapshot shape and size, and stores data in a Supabase table with RLS enabled and public roles revoked.
+- The desktop Settings page accepts a hosted API URL and backup token for the current in-memory session; only the non-secret URL is remembered. Snapshots include local user records and password hashes. This is a one-client prototype credential model, not multi-user identity or continuous synchronization.
+- Vercel publicly routes only `/api/*` to the backup service. The static `app` service has no public route until the separate web deployment is ready; no service binding is required. Do not enable a Vercel authentication gate on the API deployment because the desktop client authenticates with the backup token rather than a Vercel browser session.
+- Applied pending migrations `0005`–`0008` to Supabase after confirming the affected workspace tables were empty and migration `0005` would backfill zero rows. Verified `workspace_backup_snapshots` exists, RLS is enabled, `anon`/`authenticated` cannot select it, and it contains zero snapshots. Use `npm run db:migrate:supabase` for future Supabase migrations; plain `db:migrate` reads `DATABASE_URL`.
+- Configure `SUPABASE_DATABASE_URL`, `CLOUD_BACKUP_TOKEN`, and `CLOUD_BACKUP_WORKSPACE_ID` on the Vercel API service. No Vercel deployment, remote backup write, installer build, or device UI check was run.
+- Verification: `npm run build`, `npm run lint`, and `git diff --check` passed. Vite emitted its existing config-loader and large-chunk warnings.
+
+## 2026-11-27 — Run the offline API inside the desktop app
+
+- Packaged/local Electron builds now start the Express API in the Electron runtime, serve the built UI over a loopback-only ephemeral port, and close the server on app exit. The desktop package now includes the bundled `server.js` entry point.
+- The desktop SQLite database is stored in Electron's per-user app data folder so installations do not write into the install directory. Cloud backup remains a later follow-up.
+- Verification: `npm run build`, `npm run lint`, and `git diff --check` passed. The Windows installer/package build and installed-device signup flow were not run.
+
 ## 2026-11-27 — Separate retail preferences and dashboard views
 
 - Moved Sales and Inventory display and shortcut preferences out of General into their own Settings sidebar sections. Updated table visibility controls to use stable draft updates and immediate local feedback in each page’s View menu.

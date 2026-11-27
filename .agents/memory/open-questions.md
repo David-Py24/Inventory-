@@ -2,6 +2,12 @@
 
 Keep only questions that affect future work. Add a next step; delete or resolve entries when answered.
 
+## Cloud backup credential and retention lifecycle
+
+- **Question:** How should backup tokens be provisioned and rotated, and how long should append-only snapshots be retained?
+- **Next step:** Define revocation and retention rules before using the prototype flow for multiple clients or long-term records.
+- **Status:** Active
+
 ## Retail database follow-up
 
 - **Question:** How should repayments be allocated to individual credit sales, and how should voids/refunds reverse those allocations?
