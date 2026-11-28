@@ -10,6 +10,14 @@ Last reviewed: 2026-11-25
 
 # Inventory Documentation & Progress Log
 
+## 2026-11-28 — Serve the hosted workspace API from Vercel
+
+- The Vercel API service now mounts the app's auth, users, workspace, utang, and backup routes. The hosted frontend build forces Online mode and removes local demo credentials so browser requests use the hosted API.
+- Vercel's per-instance SQLite file is only a request projection. Successful hosted mutations are serialized with a PostgreSQL advisory lock and saved to the Supabase `web_workspace_state` row. A new workspace can initialize from the latest manual cloud snapshot; desktop SQLite and append-only manual backup behavior remain in place.
+- Added migration `0009_web_workspace_state`; applied it to Supabase and verified the table exists with RLS enabled and direct `anon`/`authenticated` access revoked. Vercel must have `SUPABASE_DATABASE_URL`, `CLOUD_BACKUP_WORKSPACE_ID`, a random `JWT_SECRET` of at least 32 characters, and the owner's `INITIAL_ADMIN_EMAIL`. Keep `CLOUD_BACKUP_TOKEN` configured for desktop manual backups.
+- First signup receives Admin only when no Admin is present and the submitted email matches `INITIAL_ADMIN_EMAIL`; other hosted signups receive Staff. The hosted workspace currently uses one configured workspace ID and is not multi-tenant.
+- Verification: `npm run lint`, `npm run build:vercel-api`, and `vite build --mode vercel` to a temporary output directory passed. The Supabase migration and RLS/privilege check passed. No Vercel deployment or browser login check was run; deployment environment configuration and redeployment remain pending. Vite reported its existing config-loader and large-chunk warnings.
+
 ## 2026-11-27 — Build the manual desktop-to-cloud snapshot path
 
 - The desktop can package local SQLite tables into a preview, compare local counts with the hosted workspace's latest snapshot, and upload after a second confirmation. Uploads create append-only snapshots; earlier cloud copies are retained. The Vercel API uses a backup-only Express app, requires a server token of at least 32 characters, selects the workspace from server configuration, validates snapshot shape and size, and stores data in a Supabase table with RLS enabled and public roles revoked.

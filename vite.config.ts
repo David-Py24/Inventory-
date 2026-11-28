@@ -10,6 +10,9 @@ export default defineConfig(({ mode }) => {
     // Electron loads the packaged renderer from file://, so its assets must
     // resolve relative to the packaged index.html. Web builds stay root-based.
     base: mode === 'desktop' ? './' : '/',
+    define: {
+      'import.meta.env.VITE_HOSTED_RUNTIME': JSON.stringify(mode === 'vercel'),
+    },
     cacheDir: isElectronPreview
       ? path.resolve(__dirname, 'node_modules/.vite-electron-preview')
       : undefined,

@@ -1,11 +1,18 @@
 # Decision records
 
+## 2026-11-28 — Persist the hosted Vercel workspace in Supabase
+
+- **Decision:** Route the hosted Vercel app's auth and workspace APIs through the full Express app, using a request-local SQLite projection backed by one Supabase `web_workspace_state` JSONB row per configured workspace. Serialize hosted requests with a PostgreSQL advisory lock. Keep desktop operational storage SQLite-first and manual cloud snapshots append-only.
+- **Reason:** Vercel function files are temporary and instance-local, while the app's existing operational routes are SQLite-based. Supabase provides persistence without requiring Firebase billing or rewriting the desktop data model.
+- **Consequences:** Apply migration `0009_web_workspace_state`. Configure `SUPABASE_DATABASE_URL`, `CLOUD_BACKUP_WORKSPACE_ID`, `JWT_SECRET`, and `INITIAL_ADMIN_EMAIL` in Vercel; preserve `CLOUD_BACKUP_TOKEN` for manual desktop backups. The hosted deployment is one shared workspace, not multi-tenant. The first Admin must sign up with the configured owner email when no Admin exists.
+- **Status:** Implemented locally; Vercel environment configuration and redeployment pending
+
 ## 2026-11-27 — Expose the Vite app and backup API on Vercel
 
 - **Decision:** Route `/api/*` to the backup API service and all remaining public paths to the static Vite app in the Vercel Services deployment.
 - **Reason:** Services are private unless exposed by top-level rewrites; the supplied successful build had no route for the app service.
-- **Consequences:** After redeploying this config, the website shell will be reachable on the deployment domain. Workspace/auth routes still require a hosted persistent backend; Vercel currently hosts only the token-protected cloud backup API. Verify runtime requests after redeploying.
-- **Status:** Active for the Vercel deployment
+- **Consequences:** The root page and token-protected backup API are exposed by rewrites. The 2026-11-28 hosted workspace API decision extends this service to mount auth/workspace routes with Supabase persistence.
+- **Status:** Active; extended by the 2026-11-28 hosted workspace decision
 
 ## 2026-11-27 — Keep desktop cloud backup manual and append-only
 

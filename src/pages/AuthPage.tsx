@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Cloud, Eye, EyeOff, HardDrive, KeyRound, Mail, ShieldCheck, UserPlus } from 'lucide-react';
 import { UserRole } from '../types';
-import type { AuthMode } from '../api/client';
+import { isHostedRuntime, type AuthMode } from '../api/client';
 
 interface AuthPageProps {
   storeName: string;
@@ -36,7 +36,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   onSignUp,
 }) => {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
-  const [authMode, setAuthMode] = useState<AuthMode>(initialAuthMode);
+  const [authMode, setAuthMode] = useState<AuthMode>(isHostedRuntime ? 'online' : initialAuthMode);
   const [syncFromCloud, setSyncFromCloud] = useState(false);
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -50,7 +50,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!isOnline && authMode === 'online') {
+    if (!isHostedRuntime && !isOnline && authMode === 'online') {
       setAuthMode('offline');
       setSyncFromCloud(false);
       setError(null);
@@ -210,7 +210,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   <UserPlus className="h-4 w-4" />
                 </button>
 
-                {mode === 'login' && (
+                {mode === 'login' && !isHostedRuntime && (
                   <button
                     type="button"
                     onClick={fillAdminDemo}
@@ -233,8 +233,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 </span>
               </div>
 
-              {/* Offline / Online Connection Mode Toggle */}
+              {/* Desktop can work offline; hosted web builds always use Supabase. */}
               <div className="mt-4">
+                {isHostedRuntime ? (
+                  <div className="border border-[#2D3227] bg-[#1D2019] px-3 py-2 text-[11px] text-[#B8B6AC]">
+                    <span className="inline-flex items-center gap-2">
+                      <Cloud className="h-3 w-3" /> Hosted workspace · Supabase
+                    </span>
+                  </div>
+                ) : (
                 <div
                   role="group"
                   aria-label="Connection mode"
@@ -277,8 +284,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     <span>Online (Cloud)</span>
                   </button>
                 </div>
+                )}
                 <p className="mt-1.5 text-[11px] text-[#7E8276]">
-                  {authMode === 'offline'
+                  {isHostedRuntime
+                    ? 'Accounts and workspace data are stored in the hosted database.'
+                    : authMode === 'offline'
                     ? 'Uses local SQLite on this device. Works without internet.'
                     : 'Verifies with Supabase PostgreSQL and supports cloud restore.'}
                 </p>
@@ -288,7 +298,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   </p>
                 )}
 
-                {authMode === 'online' && mode === 'login' && (
+                {authMode === 'online' && mode === 'login' && !isHostedRuntime && (
                   <label className="mt-2 flex items-center gap-2 text-[11.5px] text-[#B8B6AC] cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -408,16 +418,22 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       <label htmlFor="auth-role" className="sr-only">
                         Role
                       </label>
-                      <select
-                        id="auth-role"
-                        value={role}
-                        onChange={(e) => setRole(e.target.value as UserRole)}
-                        className="w-full border-0 border-b border-[#34392E] bg-[#161813] pb-2.5 pt-1 text-[13.5px] text-[#F5F2EB] focus:border-[#B89260] focus:outline-none transition-colors"
-                      >
-                        <option value="Staff">Staff</option>
-                        <option value="Manager">Manager</option>
-                        <option value="Admin">Admin</option>
-                      </select>
+                      {isHostedRuntime ? (
+                        <p className="border-b border-[#34392E] py-2 text-[11px] text-[#8E9285]">
+                          Use the configured workspace owner email for the first administrator account; other registrations are staff.
+                        </p>
+                      ) : (
+                        <select
+                          id="auth-role"
+                          value={role}
+                          onChange={(e) => setRole(e.target.value as UserRole)}
+                          className="w-full border-0 border-b border-[#34392E] bg-[#161813] pb-2.5 pt-1 text-[13.5px] text-[#F5F2EB] focus:border-[#B89260] focus:outline-none transition-colors"
+                        >
+                          <option value="Staff">Staff</option>
+                          <option value="Manager">Manager</option>
+                          <option value="Admin">Admin</option>
+                        </select>
+                      )}
                     </div>
 
                     <div>
@@ -478,7 +494,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         <div className="flex flex-wrap items-center gap-5">
           <span>{storeName}</span>
           <span>Account Access</span>
-          <span>Local Workspace</span>
+                  <span>{isHostedRuntime ? 'Hosted Workspace' : 'Local Workspace'}</span>
           {onOpenLanding && (
             <button
               type="button"

@@ -2,6 +2,12 @@
 
 Keep only questions that affect future work. Add a next step; delete or resolve entries when answered.
 
+## Vercel hosted workspace rollout
+
+- **Question:** Have the required hosted workspace environment variables been configured and the new API deployment verified with a real signup/login?
+- **Next step:** Set `SUPABASE_DATABASE_URL`, `CLOUD_BACKUP_WORKSPACE_ID`, `JWT_SECRET`, and `INITIAL_ADMIN_EMAIL` on the Vercel API service, push the local fix, redeploy Preview, and verify signup/login before promoting to Production.
+- **Status:** Active
+
 ## Cloud backup credential and retention lifecycle
 
 - **Question:** How should backup tokens be provisioned and rotated, and how long should append-only snapshots be retained?

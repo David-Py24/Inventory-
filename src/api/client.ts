@@ -19,6 +19,7 @@ const AUTH_MODE_STORAGE_KEY = 'tallyledger_auth_mode';
 
 export type AuthMode = 'offline' | 'online';
 export type WorkspaceSnapshot = Record<string, Record<string, unknown>[]>;
+export const isHostedRuntime = import.meta.env.VITE_HOSTED_RUNTIME === 'true';
 
 async function hostedBackupRequest<T>(
   apiUrl: string,
@@ -45,6 +46,7 @@ async function hostedBackupRequest<T>(
 }
 
 export function getAuthMode(): AuthMode {
+  if (isHostedRuntime) return 'online';
   try {
     return localStorage.getItem(AUTH_MODE_STORAGE_KEY) === 'online' ? 'online' : 'offline';
   } catch {
@@ -53,6 +55,7 @@ export function getAuthMode(): AuthMode {
 }
 
 export function setAuthModeStorage(mode: AuthMode): void {
+  if (isHostedRuntime && mode !== 'online') return;
   try {
     localStorage.setItem(AUTH_MODE_STORAGE_KEY, mode);
   } catch {
@@ -125,7 +128,7 @@ export const api = {
   login: (
     identifier: string,
     password: string,
-    mode: AuthMode = 'offline',
+    mode: AuthMode = isHostedRuntime ? 'online' : 'offline',
     syncFromCloud = false
   ) =>
     request<{

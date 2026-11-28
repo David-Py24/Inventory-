@@ -212,3 +212,9 @@ export const workspaceBackupSnapshots = pgTable('workspace_backup_snapshots', {
   counts: jsonb('counts').$type<Record<string, number>>().notNull(),
   backedUpAt: timestamp('backed_up_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const webWorkspaceState = pgTable('web_workspace_state', {
+  workspaceId: text('workspace_id').primaryKey(),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});

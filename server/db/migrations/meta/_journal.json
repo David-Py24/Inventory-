@@ -64,6 +64,13 @@
       "when": 1795800000000,
       "tag": "0008_workspace_backup_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795800000001,
+      "tag": "0009_web_workspace_state",
+      "breakpoints": true
     }
   ]
 }

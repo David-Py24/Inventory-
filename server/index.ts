@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { createCloudBackupApp } from './cloudBackupApp.js';
+import { createApp } from './app.js';
 
-const app = createCloudBackupApp();
+const app = createApp({ hostedWorkspace: true });
 
 export default app;

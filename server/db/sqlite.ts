@@ -4,7 +4,9 @@ import crypto from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import bcrypt from 'bcryptjs';
 
-const defaultDbPath = path.resolve(process.cwd(), 'data', 'tallyledger.db');
+const defaultDbPath = process.env.VERCEL
+  ? path.join(process.env.TMPDIR || '/tmp', 'tallyledger-web-projection.db')
+  : path.resolve(process.cwd(), 'data', 'tallyledger.db');
 export const SQLITE_DB_PATH = process.env.SQLITE_DB_PATH || defaultDbPath;
 
 fs.mkdirSync(path.dirname(SQLITE_DB_PATH), { recursive: true });
@@ -295,7 +297,7 @@ ensureUsersSchemaMigration();
 // Seed default local admin & settings if database is brand new (offline-first ready)
 function ensureLocalBootstrap(): void {
   const existingUser = sqlite.prepare('SELECT id FROM users LIMIT 1').get();
-  if (!existingUser) {
+  if (!existingUser && !process.env.VERCEL) {
     const passwordHash = bcrypt.hashSync('password123', 10);
     const now = new Date().toISOString();
     sqlite

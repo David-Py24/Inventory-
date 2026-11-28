@@ -141,6 +141,15 @@ usersRouter.post('/signup', async (req, res, next) => {
     const passwordHash = await bcrypt.hash(String(password), 10);
     const id = newId();
     const now = new Date().toISOString();
+    const existingAdminCount = Number(
+      (sqlite.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'Admin'").get() as { count: number }).count
+    );
+    const initialAdminEmail = process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase();
+    const assignedRole = process.env.VERCEL
+      ? existingAdminCount === 0 && cleanEmail?.toLowerCase() === initialAdminEmail
+        ? 'Admin'
+        : 'Staff'
+      : String(role ?? 'Staff');
     sqlite
       .prepare(
         `INSERT INTO users (id, name, username, email, password_hash, role, department, status, created_at, last_active)
@@ -152,7 +161,7 @@ usersRouter.post('/signup', async (req, res, next) => {
         cleanUsername,
         cleanEmail,
         passwordHash,
-        String(role ?? 'Staff'),
+        assignedRole,
         String(department ?? ''),
         'Active',
         now,
@@ -178,6 +187,14 @@ usersRouter.post('/login', async (req, res, next) => {
     const { identifier, email, password, mode, syncFromCloud } = req.body ?? {};
     const loginId = String(identifier ?? email ?? '').trim();
     if (!loginId || !password) throw new HttpError(400, 'username/email and password required');
+    const normalizedLoginId = loginId.toLowerCase();
+    if (
+      process.env.VERCEL &&
+      String(password) === 'password123' &&
+      (normalizedLoginId === 'admin' || normalizedLoginId === 'admin@tallyledger.local')
+    ) {
+      throw new HttpError(401, 'invalid credentials');
+    }
     const authMode = mode === 'online' ? 'online' : 'offline';
 
     if (authMode === 'offline') {
