@@ -9,6 +9,8 @@ import {
   TimeframeKey,
   TransactionRecord,
   UpcomingBill,
+  InventoryItem,
+  SaleRecord,
 } from '../types';
 import { TIMEFRAME_METRICS } from '../data/initialData';
 import { formatCurrency } from '../utils/format';
@@ -22,6 +24,8 @@ interface DashboardPageProps {
   sinkingFunds: SinkingFund[];
   goals: GoalItem[];
   transactions: TransactionRecord[];
+  inventory: InventoryItem[];
+  sales: SaleRecord[];
   defaultTimeframe?: TimeframeKey;
   includeBillsInSafeToSpend?: boolean;
   onToggleBillPaid: (id: string) => void;
@@ -38,6 +42,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   sinkingFunds,
   goals,
   transactions,
+  inventory,
+  sales,
   defaultTimeframe = 'this_month',
   includeBillsInSafeToSpend = false,
   onToggleBillPaid,
@@ -75,9 +81,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       .filter((a) => a.isLiability)
       .reduce((sum, a) => sum + a.balance, 0);
 
-    const originalDebtBaseline = 16400;
+    const originalDebtBaseline = 0;
     const paidOff = Math.max(0, originalDebtBaseline - liabilities);
-    const pct = Math.min(100, Math.max(0, Math.round((paidOff / originalDebtBaseline) * 100)));
+    const pct =
+      originalDebtBaseline > 0
+        ? Math.min(100, Math.max(0, Math.round((paidOff / originalDebtBaseline) * 100)))
+        : 0;
 
     return {
       netWorth: assets - liabilities,
@@ -99,8 +108,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   }, [transactions, txSearch]);
 
   const remainingBudget = Math.max(0, periodData.plannedBudget - periodData.spentBudget);
-  const assignedPercent = 91;
-  const leftToAssign = 1121.65;
+  const assignedPercent =
+    periodData.plannedBudget > 0
+      ? Math.min(100, Math.round((periodData.spentBudget / periodData.plannedBudget) * 100))
+      : 0;
+  const leftToAssign = Math.max(0, periodData.incomeLeftToBudget);
   const perDaySafe = effectiveSafeToSpend / 30;
   const topPriorityBill = bills.find((b) => !b.paid) ?? bills[0];
 
@@ -172,7 +184,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      {viewMode === 'budget' && <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <div className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-4 sm:p-5">
           <div className="text-[11px] sm:text-[11.5px] font-semibold tracking-wide text-[#6E7166]">
             Net Worth
@@ -215,7 +227,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             {formatCurrency(debtOriginalTotal, { maximumFractionDigits: 0 })}
           </div>
         </div>
-      </div>
+      </div>}
+
+      {viewMode === 'overview' && <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <button type="button" onClick={() => onNavigate('sales')} className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-4 text-left"><div className="text-[11px] font-semibold tracking-wide text-[#6E7166]">Sales revenue</div><div className="mt-2 text-xl font-semibold text-[#23281E]">{formatCurrency(sales.filter((sale) => ['Completed','COMPLETED'].includes(sale.status)).reduce((sum, sale) => sum + sale.quantity * sale.unitPrice - (sale.discountAmount ?? 0), 0))}</div><div className="mt-1 text-xs text-[#7D8075]">from completed sales</div></button>
+        <button type="button" onClick={() => onNavigate('sales')} className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-4 text-left"><div className="text-[11px] font-semibold tracking-wide text-[#6E7166]">Open sale balance</div><div className="mt-2 text-xl font-semibold text-[#23281E]">{formatCurrency(sales.filter((sale) => ['Pending','PENDING','UTANG','PARTIAL','FOR_DELIVERY'].includes(sale.status)).reduce((sum, sale) => sum + Math.max(0, sale.quantity * sale.unitPrice - (sale.discountAmount ?? 0) - (sale.amountPaid ?? 0)), 0))}</div><div className="mt-1 text-xs text-[#7D8075]">pending and credit orders</div></button>
+        <button type="button" onClick={() => onNavigate('inventory')} className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-4 text-left"><div className="text-[11px] font-semibold tracking-wide text-[#6E7166]">Inventory units</div><div className="mt-2 text-xl font-semibold text-[#23281E]">{inventory.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()}</div><div className="mt-1 text-xs text-[#7D8075]">{inventory.length} catalog items</div></button>
+        <button type="button" onClick={() => onNavigate('inventory')} className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-4 text-left"><div className="text-[11px] font-semibold tracking-wide text-[#6E7166]">Inventory cost value</div><div className="mt-2 text-xl font-semibold text-[#23281E]">{formatCurrency(inventory.reduce((sum, item) => sum + item.quantity * item.unitCost, 0))}</div><div className="mt-1 text-xs text-[#7D8075]">current stock on hand</div></button>
+      </div>}
 
       {viewMode === 'overview' ? (
         <>

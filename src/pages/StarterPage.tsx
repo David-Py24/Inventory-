@@ -1,5 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ClipboardCopy, Minus, Plus, RefreshCw } from 'lucide-react';
+import { api } from '../api/client';
+import type { UtangCustomer } from '../types';
 
 type Product = {
   id: string;
@@ -18,28 +20,10 @@ type Batch = {
   expiryDate: string;
 };
 
-type Customer = {
-  id: string;
-  name: string;
-  alias: string;
-  balance: number;
-};
+const INITIAL_PRODUCTS: Product[] = [];
 
-const INITIAL_PRODUCTS: Product[] = [
-  { id: 'p1', name: 'Kopiko Black 3-in-1', category: 'Sachets', currentQty: 10, reorderLevel: 10, costPrice: 5, pinned: false },
-  { id: 'p2', name: 'Coca-Cola 330ml', category: 'Drinks', currentQty: 4, reorderLevel: 12, costPrice: 18, pinned: false },
-  { id: 'p3', name: 'Sardines 155g', category: 'Canned', currentQty: 0, reorderLevel: 6, costPrice: 21, pinned: true },
-];
+const INITIAL_BATCHES: Batch[] = [];
 
-const INITIAL_BATCHES: Batch[] = [
-  { id: 'b1', productName: 'Coca-Cola 330ml', qtyRemaining: 24, expiryDate: '2026-12-31' },
-  { id: 'b2', productName: 'Sardines 155g', qtyRemaining: 12, expiryDate: '2026-11-28' },
-];
-
-const INITIAL_CUSTOMERS: Customer[] = [
-  { id: 'c1', name: 'Juan Dela Cruz', alias: 'Kuya Juan', balance: 120 },
-  { id: 'c2', name: 'Maria Santos', alias: 'Ate Maria', balance: 0 },
-];
 
 type Tab = 'lowstock' | 'restock' | 'expiry' | 'utang';
 
@@ -60,8 +44,30 @@ export const StarterPage: React.FC = () => {
   const [tab, setTab] = useState<Tab>('lowstock');
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [batches] = useState<Batch[]>(INITIAL_BATCHES);
-  const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
+  const [customers, setCustomers] = useState<UtangCustomer[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerAlias, setNewCustomerAlias] = useState('');
+  const [newCustomerLimit, setNewCustomerLimit] = useState('500');
+  const [customerFormOpen, setCustomerFormOpen] = useState(false);
+
+  useEffect(() => {
+    Promise.all([api.getUtangCustomers(), api.getWorkspace()]).then(([ledgerCustomers, workspace]) => {
+      setCustomers(ledgerCustomers);
+      setProducts(workspace.inventory.map((item) => ({
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        currentQty: item.quantity,
+        reorderLevel: item.reorderPoint,
+        costPrice: item.unitCost,
+        pinned: false,
+      })));
+    }).catch(() => {
+      setCustomers([]);
+      setProducts([]);
+    });
+  }, []);
 
   const lowStockItems = useMemo(
     () => products.filter((p) => p.currentQty <= p.reorderLevel),
@@ -86,28 +92,50 @@ export const StarterPage: React.FC = () => {
     [restockItems]
   );
 
-  const quickDeduct = (id: string, delta: number) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, currentQty: Math.max(0, p.currentQty + delta) } : p))
-    );
+  const quickDeduct = async (id: string, delta: number) => {
+    try {
+      const updated = await api.adjustInventoryQuantity(id, delta);
+      setProducts((prev) => prev.map((p) => p.id === id ? { ...p, currentQty: updated.quantity } : p));
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Could not update stock');
+    }
   };
 
-  const markRestocked = (id: string, qty: number) => {
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === id ? { ...p, currentQty: p.currentQty + qty, pinned: false } : p
-      )
-    );
+  const markRestocked = async (id: string, qty: number) => {
+    await quickDeduct(id, qty);
+    setProducts((prev) => prev.map((p) => p.id === id ? { ...p, pinned: false } : p));
   };
 
-  const adjustUtang = (id: string, delta: number) => {
-    setCustomers((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, balance: Math.max(0, c.balance + delta) } : c))
-    );
+  const adjustUtang = async (customer: UtangCustomer, delta: number) => {
+    try {
+      const result = await api.postUtangTransaction(customer.id, delta > 0 ? 'CREDIT' : 'PAYMENT', Math.abs(delta));
+      setCustomers((prev) => prev.map((c) => c.id === customer.id ? result.customer : c));
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Could not update the utang ledger');
+    }
   };
 
-  const copyReminder = async (customer: Customer) => {
-    const text = `Hi ${customer.alias || customer.name}, friendly reminder that your balance is ₱${customer.balance.toFixed(2)}. Thank you!`;
+  const addCustomer = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newCustomerName.trim()) return;
+    try {
+      const created = await api.createUtangCustomer({
+        fullName: newCustomerName.trim(),
+        alias: newCustomerAlias.trim() || undefined,
+        creditLimit: Number(newCustomerLimit),
+      });
+      setCustomers((current) => [...current, created].sort((a, b) => a.fullName.localeCompare(b.fullName)));
+      setNewCustomerName('');
+      setNewCustomerAlias('');
+      setNewCustomerLimit('500');
+      setCustomerFormOpen(false);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Could not create customer');
+    }
+  };
+
+  const copyReminder = async (customer: UtangCustomer) => {
+    const text = `Hi ${customer.alias || customer.fullName}, friendly reminder that your balance is ₱${customer.currentBalance.toFixed(2)}. Thank you!`;
     try {
       await navigator.clipboard.writeText(text);
       setCopiedId(customer.id);
@@ -138,11 +166,10 @@ export const StarterPage: React.FC = () => {
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`rounded-lg px-3.5 py-2 text-[12.5px] font-medium transition-colors ${
-              tab === t.id
+            className={`rounded-lg px-3.5 py-2 text-[12.5px] font-medium transition-colors ${tab === t.id
                 ? 'bg-[#2C3327] text-[#FCFBF8]'
                 : 'border border-[#DDD6C7] bg-[#FCFBF8] text-[#2C3327] hover:bg-[#EFEAE0]'
-            }`}
+              }`}
           >
             {t.label}
           </button>
@@ -248,20 +275,32 @@ export const StarterPage: React.FC = () => {
 
       {tab === 'utang' && (
         <div className="space-y-3">
+          <div className="flex justify-end">
+            <button type="button" onClick={() => setCustomerFormOpen((open) => !open)} className="rounded-lg bg-[#2C3327] px-3 py-2 text-[12px] font-medium text-white">{customerFormOpen ? 'Cancel' : 'Add customer'}</button>
+          </div>
+          {customerFormOpen && (
+            <form onSubmit={addCustomer} className="grid grid-cols-1 gap-2 rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-4 sm:grid-cols-4">
+              <input required value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} placeholder="Customer full name" className="rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-sm" />
+              <input value={newCustomerAlias} onChange={(e) => setNewCustomerAlias(e.target.value)} placeholder="Alias (optional)" className="rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-sm" />
+              <input type="number" min="0" step="0.01" value={newCustomerLimit} onChange={(e) => setNewCustomerLimit(e.target.value)} aria-label="Credit limit" className="rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-sm" />
+              <button type="submit" className="rounded-lg border border-[#D8E0D0] bg-[#EEF2EA] px-3 py-2 text-sm font-medium text-[#2E3628]">Save customer</button>
+            </form>
+          )}
+          {customers.length === 0 && !customerFormOpen && <p className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-5 text-center text-sm text-[#6E7166]">No utang customers yet.</p>}
           {customers.map((customer) => (
             <div key={customer.id} className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <div className="text-[14px] font-semibold text-[#23281E]">{customer.name}</div>
+                  <div className="text-[14px] font-semibold text-[#23281E]">{customer.fullName}</div>
                   <div className="text-[12px] text-[#6E7166]">{customer.alias}</div>
                   <div className="mt-1 text-[13px] font-medium text-[#23281E]">
-                    Balance: ₱{customer.balance.toFixed(2)}
+                    Balance: ₱{customer.currentBalance.toFixed(2)}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => adjustUtang(customer.id, 20)}
+                    onClick={() => adjustUtang(customer, 20)}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-[#D8E0D0] bg-[#EEF2EA] px-3 py-1.5 text-[12px] font-medium text-[#2E3628]"
                   >
                     <Plus className="h-3.5 w-3.5" />
@@ -269,8 +308,8 @@ export const StarterPage: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => adjustUtang(customer.id, -20)}
-                    disabled={customer.balance <= 0}
+                    onClick={() => adjustUtang(customer, -20)}
+                    disabled={customer.currentBalance <= 0}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-[#E8C9C3] bg-[#F9ECE9] px-3 py-1.5 text-[12px] font-medium text-[#8C3A2B] disabled:opacity-40"
                   >
                     <Minus className="h-3.5 w-3.5" />
@@ -282,15 +321,13 @@ export const StarterPage: React.FC = () => {
                     className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDD6C7] bg-white px-3 py-1.5 text-[12px] font-medium text-[#2C3327] hover:bg-[#EFEAE0]"
                   >
                     <ClipboardCopy className="h-3.5 w-3.5" />
-                    <span>{copiedId === customer.id ? 'Copied' : 'Copy Reminder'}</span>
+            <span>{copiedId === customer.id ? 'Copied' : 'Copy Reminder'}</span>
                   </button>
                 </div>
               </div>
             </div>
           ))}
-          <p className="text-[11.5px] text-[#7D8075]">
-            Demo scaffold only: amounts are fixed at ₱20 for quick testing.
-          </p>
+          <p className="text-[11.5px] text-[#7D8075]">Quick actions record ₱20 ledger entries. Payments cannot exceed the outstanding balance.</p>
         </div>
       )}
     </div>

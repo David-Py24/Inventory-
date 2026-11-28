@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowUpDown,
   Download,
@@ -9,8 +9,9 @@ import {
   Search,
   Trash2,
   X,
+  Settings2,
 } from 'lucide-react';
-import { InventoryCategory, InventoryColumnLabels, InventoryItem, InventoryStatus } from '../types';
+import { InventoryCategory, InventoryColumnLabels, InventoryFieldKey, InventoryItem, InventoryStatus, ShortcutAction, WorkspaceSettings } from '../types';
 import { downloadCsv, formatCurrency, formatNumber, getCurrencySymbol } from '../utils/format';
 import { resolveInventoryColumnLabels } from '../utils/inventoryColumns';
 import { StarterPage } from './StarterPage';
@@ -19,17 +20,30 @@ interface InventoryPageProps {
   items: InventoryItem[];
   defaultReorderPoint?: number;
   lowStockAlerts?: boolean;
+  enableUnitConversions?: boolean;
   columnLabels?: InventoryColumnLabels;
   onAddItem: (item: Omit<InventoryItem, 'id' | 'lastUpdated'>) => void;
   onUpdateItem: (item: InventoryItem) => void;
   onDeleteItem: (id: string) => void;
   onAdjustQuantity: (id: string, delta: number) => void;
+  onBreakPack: (parentId: string, childId: string, parentQty: number) => Promise<void>;
+  fieldVisibility?: Partial<Record<InventoryFieldKey, boolean>>;
+  keyboardShortcuts?: Partial<Record<ShortcutAction, string>>;
+  onSaveSettings: (next: WorkspaceSettings) => void;
+  settings: WorkspaceSettings;
 }
 
 type SortField = 'sku' | 'name' | 'category' | 'quantity' | 'unitCost' | 'totalValue';
 type StatusFilter = 'All' | InventoryStatus;
 
 const CATEGORIES: InventoryCategory[] = [
+  'General',
+  'Grocery',
+  'Beverages',
+  'Hardware',
+  'Agrivet',
+  'Bakery',
+  'School Supplies',
   'Equipment',
   'Electronics',
   'Office & Studio',
@@ -47,11 +61,17 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
   items,
   defaultReorderPoint = 8,
   lowStockAlerts = true,
+  enableUnitConversions = true,
   columnLabels,
   onAddItem,
   onUpdateItem,
   onDeleteItem,
   onAdjustQuantity,
+  onBreakPack,
+  fieldVisibility = {},
+  keyboardShortcuts = {},
+  onSaveSettings,
+  settings,
 }) => {
   const labels = resolveInventoryColumnLabels(columnLabels);
   const [view, setView] = useState<'inventory' | 'starter'>('inventory');
@@ -67,12 +87,49 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
 
   const [sku, setSku] = useState('');
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<InventoryCategory>('Equipment');
+  const [category, setCategory] = useState<InventoryCategory>('General');
   const [location, setLocation] = useState('');
   const [supplier, setSupplier] = useState('');
   const [quantity, setQuantity] = useState('0');
   const [reorderPoint, setReorderPoint] = useState(String(defaultReorderPoint));
   const [unitCost, setUnitCost] = useState('0');
+  const [unitPrice, setUnitPrice] = useState('0');
+  const [baseUnit, setBaseUnit] = useState<NonNullable<InventoryItem['baseUnit']>>('pc');
+  const [aliasesText, setAliasesText] = useState('');
+  const [parentProductId, setParentProductId] = useState('');
+  const [conversionFactor, setConversionFactor] = useState('1');
+  const [sellingUnit, setSellingUnit] = useState<NonNullable<InventoryItem['sellingUnit']>>('pc');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkCategory, setBulkCategory] = useState<InventoryCategory>('General');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [visibleFields, setVisibleFields] = useState(fieldVisibility);
+  const visible = (key: InventoryFieldKey) => visibleFields[key] !== false;
+
+  useEffect(() => setVisibleFields(fieldVisibility), [fieldVisibility]);
+
+  const saveFieldVisibility = (key: InventoryFieldKey, checked: boolean) => {
+    const nextVisibility = { ...visibleFields, [key]: checked };
+    setVisibleFields(nextVisibility);
+    onSaveSettings({ ...settings, inventoryFieldVisibility: nextVisibility });
+  };
+  const shortcutMatches = (event: KeyboardEvent, shortcut?: string) => {
+    if (!shortcut) return false;
+    const parts = shortcut.toLowerCase().split('+').map((part) => part.trim());
+    return event.key.toLowerCase() === parts[parts.length - 1] && event.altKey === parts.includes('alt') && event.ctrlKey === parts.includes('ctrl') && event.shiftKey === parts.includes('shift') && event.metaKey === parts.includes('meta');
+  };
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = !!target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+      if (shortcutMatches(event, keyboardShortcuts.newInventoryItem) && !typing) { event.preventDefault(); openAddModal(); }
+      else if (shortcutMatches(event, keyboardShortcuts.bulkEditInventory) && !typing) { event.preventDefault(); setSelectedIds(items.map((item) => item.id)); }
+      else if (shortcutMatches(event, keyboardShortcuts.searchInventory) && !typing) { event.preventDefault(); document.querySelector<HTMLInputElement>('[aria-label="Search inventory"]')?.focus(); }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [keyboardShortcuts]);
 
   const summary = useMemo(() => {
     const totalSkus = items.length;
@@ -129,16 +186,50 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
     }
   };
 
+  const breakPack = async (parent: InventoryItem) => {
+    const child = items.find((candidate) => candidate.parentProductId === parent.id);
+    if (!child) {
+      window.alert('Add a child product and link it to this bulk product first.');
+      return;
+    }
+    const rawQty = window.prompt(`How many ${parent.baseUnit ?? 'units'} of ${parent.name} to open?`, '1');
+    if (rawQty === null) return;
+    const parentQty = Number(rawQty);
+    if (!Number.isFinite(parentQty) || parentQty <= 0) {
+      window.alert('Enter a quantity greater than zero.');
+      return;
+    }
+    try {
+      await onBreakPack(parent.id, child.id, parentQty);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Could not convert stock');
+    }
+  };
+
+  const applyBulkCategory = async () => {
+    setBulkBusy(true);
+    try {
+      await Promise.all(items.filter((item) => selectedIds.includes(item.id)).map((item) => onUpdateItem({ ...item, category: bulkCategory, lastUpdated: 'Today' })));
+      setSelectedIds([]);
+    } finally { setBulkBusy(false); }
+  };
+
   const openAddModal = () => {
     setEditingItem(null);
-    setSku(`HL-NEW-${Math.floor(100 + Math.random() * 899)}`);
+    setSku('');
     setName('');
-    setCategory('Equipment');
+    setCategory('General');
     setLocation('Aisle A · Bin 01');
     setSupplier('');
     setQuantity('12');
     setReorderPoint(String(defaultReorderPoint));
     setUnitCost('45.00');
+    setUnitPrice('60.75');
+    setBaseUnit('pc');
+    setSellingUnit('pc');
+    setAliasesText('');
+    setParentProductId('');
+    setConversionFactor('1');
     setModalOpen(true);
   };
 
@@ -152,15 +243,22 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
     setQuantity(String(item.quantity));
     setReorderPoint(String(item.reorderPoint));
     setUnitCost(String(item.unitCost));
+    setUnitPrice(String(item.unitPrice ?? 0));
+    setBaseUnit(item.baseUnit ?? 'pc');
+    setSellingUnit(item.sellingUnit ?? item.baseUnit ?? 'pc');
+    setAliasesText((item.aliases ?? []).join(', '));
+    setParentProductId(item.parentProductId ?? '');
+    setConversionFactor(String(item.conversionFactor ?? 1));
     setModalOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const parsedQty = Math.max(0, parseInt(quantity, 10) || 0);
-    const parsedReorder = Math.max(0, parseInt(reorderPoint, 10) || 0);
+    const parsedQty = Math.max(0, parseFloat(quantity) || 0);
+    const parsedReorder = Math.max(0, parseFloat(reorderPoint) || 0);
     const parsedCost = Math.max(0, parseFloat(unitCost) || 0);
-    if (!sku.trim() || !name.trim()) return;
+    const parsedPrice = Math.max(0, parseFloat(unitPrice) || 0);
+    if (!name.trim()) return;
 
     if (editingItem) {
       onUpdateItem({
@@ -173,6 +271,12 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
         quantity: parsedQty,
         reorderPoint: parsedReorder,
         unitCost: parsedCost,
+        unitPrice: parsedPrice,
+        baseUnit,
+        sellingUnit,
+        aliases: aliasesText.split(',').map((value) => value.trim()).filter(Boolean),
+        parentProductId: parentProductId || undefined,
+        conversionFactor: Math.max(0.001, parseFloat(conversionFactor) || 1),
         lastUpdated: 'Today',
       });
     } else {
@@ -185,6 +289,12 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
         quantity: parsedQty,
         reorderPoint: parsedReorder,
         unitCost: parsedCost,
+        unitPrice: parsedPrice,
+        baseUnit,
+        sellingUnit,
+        aliases: aliasesText.split(',').map((value) => value.trim()).filter(Boolean),
+        parentProductId: parentProductId || undefined,
+        conversionFactor: Math.max(0.001, parseFloat(conversionFactor) || 1),
       });
     }
     setModalOpen(false);
@@ -192,7 +302,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
 
   const handleExportCsv = () => {
     downloadCsv(
-      'hearthledger-inventory.csv',
+      'tallyledger-inventory.csv',
       [
         labels.sku,
         labels.name,
@@ -319,7 +429,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search SKU or item..."
-                aria-label="Search inventory items"
+                aria-label="Search inventory"
                 className="w-full rounded-lg border border-[#E3DDD0] bg-white py-2 pl-8 pr-3 text-[12.5px] text-[#23281E] placeholder-[#8E9086] focus:border-[#B89260] focus:outline-none focus:ring-2 focus:ring-[#B89260]/20"
               />
             </div>
@@ -337,6 +447,10 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                 </option>
               ))}
             </select>
+            <div className="relative">
+              <button type="button" onClick={() => setSettingsOpen((open) => !open)} aria-label="Inventory display settings" className="inline-flex items-center gap-2 rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[12.5px] font-medium text-[#2C3327]"><Settings2 className="h-4 w-4"/><span className="hidden sm:inline">View</span></button>
+              {settingsOpen && <div className="absolute right-0 z-20 mt-2 w-56 rounded-lg border border-[#E3DDD0] bg-white p-3 shadow-lg"><div className="mb-2 text-xs font-semibold">Show fields</div>{(['sku','name','category','location','supplier','quantity','unitCost'] as InventoryFieldKey[]).map((key) => <label key={key} className="flex items-center gap-2 py-1 text-xs capitalize"><input type="checkbox" checked={visible(key)} onChange={(e) => saveFieldVisibility(key, e.target.checked)}/>{key.replace(/[A-Z]/g, (m) => ` ${m.toLowerCase()}`)}</label>)}</div>}
+            </div>
             <button
               type="button"
               onClick={() => setView('starter')}
@@ -371,8 +485,26 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
             })}
           </div>
         </div>
+        {selectedIds.length > 0 && <div className="flex items-center justify-between border-t border-[#EFEAE0] px-4 py-2 text-xs"><span>{selectedIds.length} items selected</span><div className="flex gap-2"><select aria-label="Bulk inventory category" value={bulkCategory} onChange={(e) => setBulkCategory(e.target.value as InventoryCategory)} className="rounded border px-2 py-1">{CATEGORIES.map((categoryOption) => <option key={categoryOption}>{categoryOption}</option>)}</select><button type="button" disabled={bulkBusy} onClick={applyBulkCategory} className="rounded bg-[#2C3327] px-3 py-1 text-white">Apply category</button><button type="button" onClick={() => setSelectedIds([])}>Clear</button></div></div>}
 
-        {filteredItems.length === 0 ? (
+        {items.length === 0 ? (
+          <div className="py-12 px-6 text-center">
+            <div className="text-[14px] font-medium text-[#23281E]">
+              Your inventory table is empty
+            </div>
+            <p className="mt-1 text-[12.5px] text-[#6E7166]">
+              Add your first product or item to start tracking stock levels and costs.
+            </p>
+            <button
+              type="button"
+              onClick={openAddModal}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#2C3327] px-4 py-2 text-[12.5px] font-medium text-[#FAF8F3] hover:bg-[#3A4333]"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Add Item</span>
+            </button>
+          </div>
+        ) : filteredItems.length === 0 ? (
           <div className="py-12 px-6 text-center">
             <div className="text-[14px] font-medium text-[#23281E]">
               No inventory items match your filters
@@ -412,19 +544,24 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                   <div key={item.id} className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="font-mono text-[11.5px] text-[#6E7166]">{item.sku}</div>
-                        <div className="mt-0.5 text-[14px] font-semibold text-[#23281E] leading-snug">
+                        <input className="mr-2" aria-label={`Select ${item.name}`} type="checkbox" checked={selectedIds.includes(item.id)} onChange={(e) => setSelectedIds((ids) => e.target.checked ? [...ids, item.id] : ids.filter((id) => id !== item.id))}/>
+                        {visible('sku') && <div className="font-mono text-[11.5px] text-[#6E7166]">{item.sku}</div>}
+                        {visible('name') && <div className="mt-0.5 text-[14px] font-semibold text-[#23281E] leading-snug">
                           {item.name}
-                        </div>
-                        <div className="mt-0.5 text-[12px] text-[#6E7166]">
-                          {item.category} · {item.location}
-                        </div>
+                        </div>}
+                        {(visible('category') || visible('location')) && <div className="mt-0.5 text-[12px] text-[#6E7166]">
+                          {visible('category') ? item.category : ''}{visible('category') && visible('location') ? ' · ' : ''}{visible('location') ? item.location : ''}
+                        </div>}
                       </div>
                       <span className={`inline-flex items-center gap-1.5 text-[12px] font-medium shrink-0 ${statusColor}`}>
                         <span className={`h-1.5 w-1.5 rounded-[1px] ${markerColor}`} aria-hidden="true" />
                         <span>{status}</span>
                       </span>
                     </div>
+
+                    {enableUnitConversions && items.some((candidate) => candidate.parentProductId === item.id) && (
+                      <button type="button" onClick={() => breakPack(item)} className="rounded-lg border border-[#DDD6C7] bg-white px-3 py-1.5 text-[11.5px] font-medium text-[#2C3327]">Break pack into child units</button>
+                    )}
 
                     <div className="flex items-center justify-between pt-1 gap-3">
                       <div className="flex items-center gap-2">
@@ -511,7 +648,8 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
               <table className="w-full border-collapse text-left">
                 <thead>
                   <tr className="border-b border-[#E6E0D3] bg-[#F8F5EE] text-[11.5px] font-semibold text-[#5C6055]">
-                    <th className="py-3 pl-5 pr-3 whitespace-nowrap">
+                    <th className="py-3 pl-5 pr-3 whitespace-nowrap"><input aria-label="Select all visible inventory" type="checkbox" checked={filteredItems.length > 0 && filteredItems.every((item) => selectedIds.includes(item.id))} onChange={(e) => setSelectedIds(e.target.checked ? filteredItems.map((item) => item.id) : [])}/></th>
+                    {visible('sku') && <th className="py-3 pl-5 pr-3 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => toggleSort('sku')}
@@ -520,8 +658,8 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                         <span>{labels.sku}</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
-                    </th>
-                    <th className="py-3 px-3 whitespace-nowrap">
+                    </th>}
+                    {visible('name') && <th className="py-3 px-3 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => toggleSort('name')}
@@ -530,8 +668,8 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                         <span>{labels.name}</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
-                    </th>
-                    <th className="py-3 px-3 whitespace-nowrap">
+                    </th>}
+                    {visible('category') && <th className="py-3 px-3 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => toggleSort('category')}
@@ -540,9 +678,9 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                         <span>{labels.category}</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
-                    </th>
-                    <th className="py-3 px-3 whitespace-nowrap">{labels.location}</th>
-                    <th className="py-3 px-3 text-right whitespace-nowrap">
+                    </th>}
+                    {visible('location') && <th className="py-3 px-3 whitespace-nowrap">{labels.location}</th>}
+                    {visible('quantity') && <th className="py-3 px-3 text-right whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => toggleSort('quantity')}
@@ -551,8 +689,8 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                         <span>{labels.quantity}</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
-                    </th>
-                    <th className="py-3 px-3 text-right whitespace-nowrap">
+                    </th>}
+                    {visible('unitCost') && <th className="py-3 px-3 text-right whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => toggleSort('unitCost')}
@@ -561,7 +699,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                         <span>{labels.unitCost}</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
-                    </th>
+                    </th>}
                     <th className="py-3 px-3 text-right whitespace-nowrap">
                       <button
                         type="button"
@@ -595,20 +733,21 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
 
                     return (
                       <tr key={item.id} className="hover:bg-[#F8F5EE]/70 transition-colors">
-                        <td className="py-3 pl-5 pr-3 font-mono text-[12px] text-[#4B4E44] whitespace-nowrap">
+                        <td className="py-3 pl-5 pr-3"><input aria-label={`Select ${item.name}`} type="checkbox" checked={selectedIds.includes(item.id)} onChange={(e) => setSelectedIds((ids) => e.target.checked ? [...ids, item.id] : ids.filter((id) => id !== item.id))}/></td>
+                        {visible('sku') && <td className="py-3 pl-5 pr-3 font-mono text-[12px] text-[#4B4E44] whitespace-nowrap">
                           {item.sku}
-                        </td>
-                        <td className="py-3 px-3">
+                        </td>}
+                        {visible('name') && <td className="py-3 px-3">
                           <div className="font-medium text-[#23281E]">{item.name}</div>
-                          <div className="text-[11.5px] text-[#7D8075]">{item.supplier}</div>
-                        </td>
-                        <td className="py-3 px-3 text-[#4B4E44] whitespace-nowrap">
+                          {visible('supplier') && <div className="text-[11.5px] text-[#7D8075]">{item.supplier}</div>}
+                        </td>}
+                        {visible('category') && <td className="py-3 px-3 text-[#4B4E44] whitespace-nowrap">
                           {item.category}
-                        </td>
-                        <td className="py-3 px-3 text-[12.5px] text-[#6E7166] whitespace-nowrap">
+                        </td>}
+                        {visible('location') && <td className="py-3 px-3 text-[12.5px] text-[#6E7166] whitespace-nowrap">
                           {item.location}
-                        </td>
-                        <td className="py-3 px-3 text-right whitespace-nowrap">
+                        </td>}
+                        {visible('quantity') && <td className="py-3 px-3 text-right whitespace-nowrap">
                           <div className="inline-flex items-center justify-end gap-1.5">
                             <button
                               type="button"
@@ -631,10 +770,10 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                               <Plus className="h-3 w-3" />
                             </button>
                           </div>
-                        </td>
-                        <td className="py-3 px-3 text-right text-[#23281E] tabular-nums whitespace-nowrap">
+                        </td>}
+                        {visible('unitCost') && <td className="py-3 px-3 text-right text-[#23281E] tabular-nums whitespace-nowrap">
                           {formatCurrency(item.unitCost)}
-                        </td>
+                        </td>}
                         <td className="py-3 px-3 text-right font-medium text-[#23281E] tabular-nums whitespace-nowrap">
                           {formatCurrency(totalValue)}
                         </td>
@@ -675,6 +814,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </button>
+                              {enableUnitConversions && items.some((candidate) => candidate.parentProductId === item.id) && <button type="button" onClick={() => breakPack(item)} aria-label={`Break pack for ${item.name}`} className="rounded-md px-2 py-1 text-[11px] text-[#2C3327] hover:bg-[#EFEAE0]">Break</button>}
                               <button
                                 type="button"
                                 onClick={() => setConfirmDeleteId(item.id)}
@@ -739,9 +879,9 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                   </label>
                   <input
                     type="text"
-                    required
                     value={sku}
                     onChange={(e) => setSku(e.target.value)}
+                    placeholder="Leave blank to generate a SKU"
                     className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 font-mono text-[13px] focus:border-[#B89260] focus:outline-none"
                   />
                 </div>
@@ -810,6 +950,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                   <input
                     type="number"
                     min="0"
+                    step="0.001"
                     required
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
@@ -823,6 +964,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                   <input
                     type="number"
                     min="0"
+                    step="0.001"
                     required
                     value={reorderPoint}
                     onChange={(e) => setReorderPoint(e.target.value)}
@@ -844,6 +986,45 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                   />
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-[#5C6055]">Base unit</label>
+                  <select value={baseUnit} onChange={(e) => setBaseUnit(e.target.value as typeof baseUnit)} className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px]">
+                    {['pc', 'pack', 'kg', 'g', 'meter', 'liter', 'sack', 'box', 'sheet', 'tasa', 'tray', 'ream'].map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-[#5C6055]">Default selling unit</label>
+                  <select value={sellingUnit} onChange={(e) => setSellingUnit(e.target.value as typeof sellingUnit)} className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px]">
+                    {['pc', 'pack', 'kg', 'g', 'meter', 'liter', 'sack', 'box', 'sheet', 'tasa', 'tray', 'ream'].map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-[#5C6055]">Default selling price ({getCurrencySymbol()})</label>
+                  <input type="number" min="0" step="0.01" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] tabular-nums" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-[#5C6055]">Aliases (comma separated)</label>
+                  <input value={aliasesText} onChange={(e) => setAliasesText(e.target.value)} placeholder="Common spelling or local name" className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px]" />
+                </div>
+                <div>
+                  {enableUnitConversions && <>
+                    <label className="mb-1 block text-[12px] font-medium text-[#5C6055]">Parent bulk product (optional)</label>
+                    <select value={parentProductId} onChange={(e) => setParentProductId(e.target.value)} className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px]">
+                      <option value="">None</option>
+                      {items.filter((candidate) => candidate.id !== editingItem?.id).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+                    </select>
+                  </>}
+                </div>
+              </div>
+              {enableUnitConversions && parentProductId && <div>
+                <label className="mb-1 block text-[12px] font-medium text-[#5C6055]">Child units yielded from one parent unit</label>
+                <input type="number" min="0.001" step="0.001" value={conversionFactor} onChange={(e) => setConversionFactor(e.target.value)} className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px]" />
+              </div>}
 
               <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#EFEAE0]">
                 <button

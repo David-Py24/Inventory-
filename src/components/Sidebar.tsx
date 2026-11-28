@@ -1,6 +1,9 @@
 import React from 'react';
 import {
   BarChart3,
+  Cloud,
+  ExternalLink,
+  HardDrive,
   Home,
   Landmark,
   Package,
@@ -10,13 +13,17 @@ import {
   X,
 } from 'lucide-react';
 import { PageRoute } from '../types';
+import type { AuthMode } from '../api/client';
 
 interface SidebarProps {
   activeRoute: PageRoute;
   onNavigate: (route: PageRoute) => void;
   onResetDemoData: () => void;
+  onOpenLanding?: () => void;
   storeName?: string;
   workspaceSubtitle?: string;
+  authMode?: AuthMode;
+  isOnline?: boolean;
   mobileOpen: boolean;
   onCloseMobile: () => void;
 }
@@ -34,8 +41,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeRoute,
   onNavigate,
   onResetDemoData,
-  storeName = 'HearthLedger',
+  onOpenLanding,
+  storeName = 'TallyLedger',
   workspaceSubtitle = 'Financial Command Center',
+  authMode = 'offline',
+  isOnline = true,
   mobileOpen,
   onCloseMobile,
 }) => {
@@ -123,14 +133,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      <div className="px-3.5 pb-6 pt-4 border-t border-white/10">
+      <div className="px-3.5 pb-6 pt-4 border-t border-white/10 space-y-2">
+        <div className="flex items-center gap-2 rounded-lg bg-white/[0.04] px-3.5 py-2 text-[11.5px] font-medium text-[#B9B9AE]">
+          {isOnline && authMode === 'online' ? (
+            <Cloud className="h-3.5 w-3.5 shrink-0 text-[#B89260]" />
+          ) : (
+            <HardDrive className="h-3.5 w-3.5 shrink-0 text-[#97998E]" />
+          )}
+          <span>
+            {!isOnline
+              ? 'Offline · No Internet'
+              : authMode === 'online'
+                ? 'Online · Cloud Sync'
+                : 'Offline · Local DB'}
+          </span>
+        </div>
+        {onOpenLanding && (
+          <button
+            type="button"
+            onClick={() => {
+              onOpenLanding();
+              onCloseMobile();
+            }}
+            className="flex w-full items-center justify-between gap-3 rounded-lg px-3.5 py-2.5 text-[13px] font-medium text-[#B9B9AE] hover:bg-white/[0.06] hover:text-[#FAF8F3] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B89260]"
+          >
+            <span className="flex items-center gap-3">
+              <ExternalLink className="h-4 w-4 shrink-0 text-[#97998E]" />
+              <span>Landing &amp; Docs</span>
+            </span>
+          </button>
+        )}
         <button
           type="button"
           onClick={onResetDemoData}
           className="flex w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-[13px] font-medium text-[#B9B9AE] hover:bg-white/[0.06] hover:text-[#FAF8F3] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B89260]"
         >
           <RotateCcw className="h-4 w-4 shrink-0 text-[#97998E]" />
-          <span>Reset Ledger Data</span>
+          <span>Refresh Workspace</span>
         </button>
       </div>
     </div>

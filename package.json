@@ -1,27 +1,41 @@
 {
-  "name": "react-example",
+  "name": "tallyledger",
+  "productName": "TallyLedger",
+  "description": "Inventory management workspace",
+  "author": "TallyLedger",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts --dev",
     "build": "vite build && esbuild server.ts --bundle --platform=node --packages=external --format=esm --outfile=server.js",
+    "build:vercel-api": "esbuild server/index.ts --bundle --platform=node --packages=external --format=esm --outfile=server.vercel.js",
     "start": "node server.js",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:migrate:supabase": "drizzle-kit migrate --config=drizzle.supabase.config.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx server/db/seed.ts"
+    "db:seed": "tsx server/db/seed.ts",
+    "desktop:preview": "node electron/dev.cjs",
+    "electron:dev": "npm run build && electron .",
+    "electron:build": "npm run build && electron-builder",
+    "desktop:build": "vite build --mode desktop && electron-builder --win nsis --publish never",
+    "dist": "npm run build && electron-builder --publish never"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@supabase/server": "^1.9.2",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.4",
+    "electron-updater": "^6.8.11",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.546.0",
@@ -40,10 +54,45 @@
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.4.21",
     "drizzle-kit": "^0.31.11",
-    "esbuild": "^0.25.0",
+    "electron": "^45.5.0",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
-    "typescript": "^7.0.2"
+    "typescript": "^6.0.3"
+  },
+  "build": {
+    "appId": "com.tallyledger.app",
+    "productName": "TallyLedger",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "server.js",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "public/app-icon.ico",
+      "artifactName": "${productName}-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.finance"
+    },
+    "linux": {
+      "target": ["AppImage"]
+    },
+    "publish": {
+      "provider": "github"
+    }
   },
   "allowScripts": {
     "protobufjs@7.6.6": true,

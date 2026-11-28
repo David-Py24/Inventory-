@@ -41,7 +41,7 @@ batchesRouter.get('/expiring', requireAuth, async (req, res, next) => {
       .where(
         and(
           lte(inventoryBatches.expiryDate, cutoff.toISOString().slice(0, 10)),
-          gte(inventoryBatches.qtyRemaining, 1)
+          gte(inventoryBatches.qtyRemaining, '0.001')
         )
       )
       .orderBy(asc(inventoryBatches.expiryDate));
@@ -61,7 +61,7 @@ batchesRouter.post('/', requireAuth, async (req, res, next) => {
       .insert(inventoryBatches)
       .values({
         productId,
-        qtyRemaining: Number(qtyRemaining ?? 0),
+        qtyRemaining: String(qtyRemaining ?? 0),
         costPrice: String(costPrice ?? 0),
         expiryDate: expiryDate ?? null,
       })
@@ -86,7 +86,7 @@ batchesRouter.post('/mark-restocked', requireAuth, async (req, res, next) => {
     const [updatedProduct] = await db
       .update(products)
       .set({
-        currentQty: product.currentQty + quantity,
+        currentQty: String(Number(product.currentQty) + quantity),
         isPinnedRestock: false,
         updatedAt: new Date(),
       })
@@ -97,7 +97,7 @@ batchesRouter.post('/mark-restocked', requireAuth, async (req, res, next) => {
       .insert(inventoryBatches)
       .values({
         productId,
-        qtyRemaining: quantity,
+        qtyRemaining: String(quantity),
         costPrice: product.costPrice,
         expiryDate: expiryDate ?? null,
       })

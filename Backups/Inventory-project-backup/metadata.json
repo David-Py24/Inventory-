@@ -1,0 +1,6 @@
+{
+  "name": "HearthLedger",
+  "description": "Financial command center with interactive overview dashboard, inventory ledger, reports, and accounts management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

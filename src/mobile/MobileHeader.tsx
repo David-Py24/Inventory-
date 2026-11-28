@@ -1,15 +1,20 @@
 import React from 'react';
-import { Menu } from 'lucide-react';
+import { Cloud, HardDrive, Menu } from 'lucide-react';
 import { UserAccount } from '../types';
+import type { AuthMode } from '../api/client';
 
 interface MobileHeaderProps {
   currentUser: UserAccount;
+  authMode?: AuthMode;
+  isOnline?: boolean;
   onOpenProfile: () => void;
   onOpenMenu: () => void;
 }
 
 export const MobileHeader: React.FC<MobileHeaderProps> = ({
   currentUser,
+  authMode = 'offline',
+  isOnline = true,
   onOpenProfile,
   onOpenMenu,
 }) => {
@@ -40,14 +45,24 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
         </div>
       </button>
 
-      <button
-        type="button"
-        onClick={onOpenMenu}
-        aria-label="Open navigation menu"
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#E6E0D3] bg-[#FCFBF8] text-[#2C3327] hover:bg-[#EFE9DC] transition-colors"
-      >
-        <Menu className="h-[18px] w-[18px]" />
-      </button>
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center gap-1 rounded-full border border-[#E6E0D3] bg-[#FCFBF8] px-2.5 py-1 text-[10.5px] font-medium text-[#555A4E]">
+          {isOnline && authMode === 'online' ? (
+            <Cloud className="h-3 w-3 text-[#B89260]" />
+          ) : (
+            <HardDrive className="h-3 w-3 text-[#7D8075]" />
+          )}
+          <span>{!isOnline ? 'Offline' : authMode === 'online' ? 'Online' : 'Offline'}</span>
+        </span>
+        <button
+          type="button"
+          onClick={onOpenMenu}
+          aria-label="Open navigation menu"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#E6E0D3] bg-[#FCFBF8] text-[#2C3327] hover:bg-[#EFE9DC] transition-colors"
+        >
+          <Menu className="h-[18px] w-[18px]" />
+        </button>
+      </div>
     </header>
   );
 };

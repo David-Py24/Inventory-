@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Download, RotateCcw, Upload } from 'lucide-react';
-import { CurrencyCode, TimeframeKey, WorkspaceSettings } from '../types';
+import { Check, Cloud, CloudUpload, Download, RotateCcw, Upload } from 'lucide-react';
+import { BusinessType, CurrencyCode, InventoryFieldKey, SalesFieldKey, ShortcutAction, TimeframeKey, WorkspaceSettings } from '../types';
+import { api, type WorkspaceSnapshot } from '../api/client';
 import { CURRENCY_OPTIONS } from '../utils/format';
 import {
   DEFAULT_INVENTORY_COLUMN_LABELS,
@@ -11,16 +12,18 @@ import {
 
 interface SettingsPageProps {
   settings: WorkspaceSettings;
+  isOnline?: boolean;
   onSaveSettings: (next: WorkspaceSettings) => void;
   onExportBackup: () => void;
   onImportBackup: (jsonText: string) => boolean;
   onResetAll: () => void;
 }
 
-type SettingsSectionId = 'general' | 'inventory' | 'accounts' | 'data';
+type SettingsSectionId = 'general' | 'sales' | 'inventory' | 'accounts' | 'data';
 
 const SETTINGS_NAV_ITEMS: { id: SettingsSectionId; label: string }[] = [
   { id: 'general', label: 'General' },
+  { id: 'sales', label: 'Sales' },
   { id: 'inventory', label: 'Inventory' },
   { id: 'accounts', label: 'Accounts' },
   { id: 'data', label: 'Data & recovery' },
@@ -28,6 +31,7 @@ const SETTINGS_NAV_ITEMS: { id: SettingsSectionId; label: string }[] = [
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   settings,
+  isOnline = true,
   onSaveSettings,
   onExportBackup,
   onImportBackup,
@@ -41,7 +45,80 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     message: string;
   } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [cloudBusy, setCloudBusy] = useState<'push' | null>(null);
+  const [backupPreview, setBackupPreview] = useState<{
+    snapshot: WorkspaceSnapshot;
+    localCounts: Record<string, number>;
+    cloudCounts: Record<string, number>;
+    cloudHasData: boolean;
+    backedUpAt: string | null;
+  } | null>(null);
+  const [cloudApiUrl, setCloudApiUrl] = useState(() => {
+    try {
+      return localStorage.getItem('tallyledger_cloud_backup_api_url') || import.meta.env.VITE_CLOUD_BACKUP_API_URL || '';
+    } catch {
+      return import.meta.env.VITE_CLOUD_BACKUP_API_URL || '';
+    }
+  });
+  const [cloudAccessToken, setCloudAccessToken] = useState('');
+  const [lastCloudBackupAt, setLastCloudBackupAt] = useState<string | null>(null);
+  const [cloudNotice, setCloudNotice] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tallyledger_cloud_backup_api_url', cloudApiUrl.trim());
+    } catch {
+      // URL is non-secret; keeping it is optional.
+    }
+  }, [cloudApiUrl]);
+
+  const handleCloudBackup = async () => {
+    setCloudBusy('push');
+    setCloudNotice(null);
+    try {
+      if (!/^https:\/\//i.test(cloudApiUrl) && !/^http:\/\/localhost(?::\d+)?$/i.test(cloudApiUrl)) {
+        throw new Error('Enter the hosted HTTPS backup API URL.');
+      }
+      if (!cloudAccessToken.trim()) throw new Error('Enter the backup access token provided by the administrator.');
+      const local = await api.getLocalBackupSnapshot();
+      const cloud = await api.previewHostedCloudBackup(cloudApiUrl, cloudAccessToken.trim());
+      setBackupPreview({ snapshot: local.snapshot, localCounts: local.counts, ...cloud });
+      setLastCloudBackupAt(cloud.backedUpAt);
+    } catch (err) {
+      setCloudNotice({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Could not preview cloud backup.',
+      });
+    } finally {
+      setCloudBusy(null);
+    }
+  };
+
+  const confirmCloudBackup = async () => {
+    setCloudBusy('push');
+    setCloudNotice(null);
+    try {
+      if (!backupPreview) throw new Error('Review the local and cloud counts before uploading.');
+      const res = await api.uploadHostedCloudBackup(cloudApiUrl, cloudAccessToken.trim(), backupPreview.snapshot);
+      setLastCloudBackupAt(res.backedUpAt);
+      setCloudNotice({
+        type: 'success',
+        message: 'Cloud backup completed. Local data remains stored on this device.',
+      });
+    } catch (err) {
+      setCloudNotice({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Cloud backup failed.',
+      });
+    } finally {
+      setCloudBusy(null);
+      setBackupPreview(null);
+    }
+  };
 
   useEffect(() => {
     setDraft(settings);
@@ -79,7 +156,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     e?.preventDefault();
     onSaveSettings({
       ...draft,
-      storeName: draft.storeName.trim() || 'HearthLedger',
+      storeName: draft.storeName.trim() || 'TallyLedger',
       workspaceSubtitle: draft.workspaceSubtitle.trim() || 'Financial Command Center',
       ownerEmail: draft.ownerEmail.trim() || settings.ownerEmail,
       defaultReorderPoint: Math.max(0, Number(draft.defaultReorderPoint) || 0),
@@ -100,7 +177,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           ? { type: 'success', message: 'Workspace backup restored successfully.' }
           : {
               type: 'error',
-              message: 'Invalid backup file. Please choose a HearthLedger JSON export.',
+              message: 'Invalid backup file. Please choose a TallyLedger JSON export.',
             }
       );
       window.setTimeout(() => setImportStatus(null), 3500);
@@ -191,7 +268,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       required
                       value={draft.storeName}
                       onChange={(e) => setDraft({ ...draft, storeName: e.target.value })}
-                      placeholder="HearthLedger"
+                      placeholder="TallyLedger"
                       className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] text-[#23281E] focus:border-[#B89260] focus:outline-none focus:ring-2 focus:ring-[#B89260]/20"
                     />
                   </div>
@@ -212,6 +289,28 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] text-[#23281E] focus:border-[#B89260] focus:outline-none focus:ring-2 focus:ring-[#B89260]/20"
                     />
                   </div>
+                  <div>
+                    <label htmlFor="settings-business-type" className="mb-1.5 block text-[12px] font-medium text-[#5C6055]">Retail business type</label>
+                    <select id="settings-business-type" value={draft.businessType ?? 'SARI_SARI'} onChange={(e) => setDraft({ ...draft, businessType: e.target.value as BusinessType })} className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] text-[#23281E]">
+                      <option value="SARI_SARI">Sari-sari store</option>
+                      <option value="HARDWARE">Hardware</option>
+                      <option value="AGRIVET">Agrivet</option>
+                      <option value="BAKERY">Bakery</option>
+                      <option value="SCHOOL_SUPPLY">School and office supplies</option>
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-2 text-[12.5px] text-[#4B4E44]">
+                    <input type="checkbox" checked={draft.requireCustomerName ?? false} onChange={(e) => setDraft({ ...draft, requireCustomerName: e.target.checked })} className="rounded border-[#CFC7B5] text-[#2C3327] focus:ring-[#B89260]" />
+                    Require a customer name on sales
+                  </label>
+                  <label className="flex items-center gap-2 text-[12.5px] text-[#4B4E44]">
+                    <input type="checkbox" checked={draft.requireSaleStatus ?? false} onChange={(e) => setDraft({ ...draft, requireSaleStatus: e.target.checked })} className="rounded border-[#CFC7B5] text-[#2C3327] focus:ring-[#B89260]" />
+                    Show sale status at checkout
+                  </label>
+                  <label className="flex items-center gap-2 text-[12.5px] text-[#4B4E44]">
+                    <input type="checkbox" checked={draft.enableUnitConversions ?? true} onChange={(e) => setDraft({ ...draft, enableUnitConversions: e.target.checked })} className="rounded border-[#CFC7B5] text-[#2C3327] focus:ring-[#B89260]" />
+                    Enable bulk-to-tingi conversions
+                  </label>
                 </div>
               </section>
 
@@ -274,6 +373,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </section>
             </div>
 
+            {/* Sales Section */}
+            <div id="settings-sec-sales" className="scroll-mt-6 space-y-4">
+              <div className="border-b border-[#E6E0D3] pb-3.5"><h2 className="font-serif text-[20px] font-semibold tracking-tight text-[#23281E]">Sales</h2><p className="mt-0.5 text-[12.5px] text-[#6E7166]">Choose visible sales fields and customize sales-page shortcuts.</p></div>
+              <section className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-5 sm:p-6"><div className="border-b border-[#EFEAE0] pb-3.5 mb-4"><h3 className="text-[14px] font-semibold text-[#23281E]">Visible fields</h3><p className="mt-0.5 text-[12.5px] text-[#6E7166]">Uncheck a field to hide it in the sales table and mobile cards.</p></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{(['customerName','channel','inventoryItem','sku','quantity','unitPrice','status','date','notes'] as SalesFieldKey[]).map((key) => <label key={key} className="flex cursor-pointer items-center gap-2 text-[12px] capitalize"><input type="checkbox" checked={draft.salesFieldVisibility?.[key] !== false} onChange={(e) => setDraft((current) => ({ ...current, salesFieldVisibility: { ...current.salesFieldVisibility, [key]: e.target.checked } }))}/>{key === 'inventoryItem' ? 'Item' : key.replace(/[A-Z]/g, (m) => ` ${m.toLowerCase()}`)}</label>)}</div></section>
+              <section className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-5 sm:p-6"><div className="border-b border-[#EFEAE0] pb-3.5 mb-4"><h3 className="text-[14px] font-semibold text-[#23281E]">Sales shortcuts</h3><p className="mt-0.5 text-[12.5px] text-[#6E7166]">Use combinations such as Alt+N, /, or Alt+E. Clear a field to disable its shortcut.</p></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{([['newSale','New sale'],['searchSales','Search sales'],['bulkEditSales','Select sales']] as [ShortcutAction,string][]).map(([key,label]) => <label key={key} className="text-[12px] font-medium text-[#5C6055]">{label}<input value={draft.keyboardShortcuts?.[key] ?? ''} placeholder="Disabled" onChange={(e) => setDraft((current) => ({ ...current, keyboardShortcuts: { ...current.keyboardShortcuts, [key]: e.target.value.trim() } }))} className="mt-1 w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] font-normal" /></label>)}</div></section>
+            </div>
+
             {/* Inventory Section */}
             <div id="settings-sec-inventory" className="scroll-mt-6 space-y-4">
               <div className="border-b border-[#E6E0D3] pb-3.5">
@@ -284,6 +390,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   Reorder thresholds, stock alerts, and column names.
                 </p>
               </div>
+
+              <section className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-5 sm:p-6"><div className="border-b border-[#EFEAE0] pb-3.5 mb-4"><h3 className="text-[14px] font-semibold text-[#23281E]">Visible inventory fields</h3><p className="mt-0.5 text-[12.5px] text-[#6E7166]">Uncheck a field to hide it from the inventory list and cards.</p></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{(['sku','name','category','location','supplier','quantity','unitCost'] as InventoryFieldKey[]).map((key) => <label key={key} className="flex cursor-pointer items-center gap-2 text-[12px] capitalize"><input type="checkbox" checked={draft.inventoryFieldVisibility?.[key] !== false} onChange={(e) => setDraft((current) => ({ ...current, inventoryFieldVisibility: { ...current.inventoryFieldVisibility, [key]: e.target.checked } }))}/>{key.replace(/[A-Z]/g, (m) => ` ${m.toLowerCase()}`)}</label>)}</div></section>
+              <section className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-5 sm:p-6"><div className="border-b border-[#EFEAE0] pb-3.5 mb-4"><h3 className="text-[14px] font-semibold text-[#23281E]">Inventory shortcuts</h3><p className="mt-0.5 text-[12.5px] text-[#6E7166]">Customize keyboard and selection actions for the inventory page.</p></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{([['newInventoryItem','New inventory item'],['searchInventory','Search inventory'],['bulkEditInventory','Select inventory']] as [ShortcutAction,string][]).map(([key,label]) => <label key={key} className="text-[12px] font-medium text-[#5C6055]">{label}<input value={draft.keyboardShortcuts?.[key] ?? ''} placeholder="Disabled" onChange={(e) => setDraft((current) => ({ ...current, keyboardShortcuts: { ...current.keyboardShortcuts, [key]: e.target.value.trim() } }))} className="mt-1 w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] font-normal" /></label>)}</div></section>
 
               <section className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-5 sm:p-6">
                 <div className="border-b border-[#EFEAE0] pb-3.5 mb-4">
@@ -428,7 +537,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                       type="email"
                       value={draft.ownerEmail}
                       onChange={(e) => setDraft({ ...draft, ownerEmail: e.target.value })}
-                      placeholder="owner@hearthledger.app"
+                      placeholder="owner@tallyledger.app"
                       className="w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] text-[#23281E] focus:border-[#B89260] focus:outline-none focus:ring-2 focus:ring-[#B89260]/20"
                     />
                   </div>
@@ -536,6 +645,103 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     }`}
                   >
                     {importStatus.message}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-xl border border-[#E6E0D3] bg-[#FCFBF8] p-5 sm:p-6">
+                <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[#EFEAE0] pb-3.5 mb-4">
+                  <div>
+                    <h3 className="text-[14px] font-semibold text-[#23281E] flex items-center gap-2">
+                      <Cloud className="h-4 w-4 text-[#6E7166]" />
+                  <span>Manual cloud backup</span>
+                    </h3>
+                    <p className="mt-0.5 text-[12.5px] text-[#6E7166]">
+                      Your workspace stays on this device. Review a snapshot and upload it to the
+                      assigned cloud workspace when you choose.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                  <label className="text-[12px] font-medium text-[#6E7166]">
+                    Hosted backup API URL
+                    <input value={cloudApiUrl} onChange={(event) => { setCloudApiUrl(event.target.value); setBackupPreview(null); }} placeholder="https://your-project.vercel.app" spellCheck={false} autoComplete="url" className="mt-1 w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] text-[#23281E] outline-none focus:border-[#9E825E]" />
+                  </label>
+                  <label className="text-[12px] font-medium text-[#6E7166]">
+                    Backup access token
+                    <input type="password" value={cloudAccessToken} onChange={(event) => { setCloudAccessToken(event.target.value); setBackupPreview(null); }} placeholder="Provided by the administrator" autoComplete="new-password" className="mt-1 w-full rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[13px] text-[#23281E] outline-none focus:border-[#9E825E]" />
+                    <span className="mt-1 block text-[10.5px] font-normal">Token is kept in memory only while this page is open.</span>
+                  </label>
+                </div>
+                <p className="mb-3 text-[12px] text-[#6E7166]">
+                  Last cloud backup: <span className="font-medium text-[#23281E]">{lastCloudBackupAt ? new Date(lastCloudBackupAt).toLocaleString() : 'Not checked yet'}</span>
+                </p>
+
+                {!isOnline && (
+                  <p className="mb-3 text-[11.5px] text-[#9B3B2B]">
+                  You are offline. Cloud backup is unavailable until you reconnect.
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <button
+                    type="button"
+                    disabled={cloudBusy !== null || !isOnline}
+                    onClick={handleCloudBackup}
+                    title={!isOnline ? 'No internet connection. Cloud backup disabled.' : undefined}
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#2C3327] px-3.5 py-2 text-[12.5px] font-medium text-[#FCFBF8] hover:bg-[#3A4333] disabled:opacity-50 transition-colors"
+                  >
+                    <CloudUpload className="h-3.5 w-3.5" />
+                    <span>{cloudBusy === 'push' ? 'Reviewing…' : 'Review cloud backup'}</span>
+                  </button>
+                </div>
+
+                {backupPreview && (
+                  <div className="mt-4 rounded-lg border border-[#D8C8A9] bg-[#F8F5EE] p-4">
+                    <h4 className="text-[13px] font-semibold text-[#23281E]">Review cloud backup</h4>
+                    <p className="mt-1 text-[12px] leading-5 text-[#6E7166]">
+                      This creates a new cloud snapshot and retains earlier snapshots. It includes
+                      local user records and password hashes, along with workspace financial and
+                      inventory data. It does not modify local data or enable automatic sync.
+                    </p>
+                    {backupPreview.cloudHasData && (
+                      <p className="mt-2 text-[12px] font-medium text-[#9B3B2B]">
+                        Previous cloud snapshots exist and will be retained.
+                      </p>
+                    )}
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-[11.5px] text-[#6E7166] sm:grid-cols-3">
+                      {Object.entries(backupPreview.localCounts).map(([key, count]) => (
+                        <div key={key} className="rounded border border-[#E6E0D3] bg-white px-2.5 py-2">
+                          <span className="block capitalize">{key.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`)}</span>
+                          <span className="font-semibold text-[#23281E]">Local {count} · Cloud {backupPreview.cloudCounts[key] ?? 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setBackupPreview(null)}
+                        className="rounded-lg border border-[#DDD6C7] px-3 py-2 text-[12px] text-[#2C3327] hover:bg-white"
+                      >Cancel</button>
+                      <button
+                        type="button"
+                        disabled={cloudBusy !== null || !isOnline}
+                        onClick={confirmCloudBackup}
+                        className="rounded-lg bg-[#2C3327] px-3 py-2 text-[12px] font-medium text-white hover:bg-[#3A4333] disabled:opacity-50"
+                      >{cloudBusy === 'push' ? 'Backing up…' : 'Confirm and back up'}</button>
+                    </div>
+                  </div>
+                )}
+
+                {cloudNotice && (
+                  <div
+                    className={`mt-3 rounded-lg border px-3 py-2 text-[12.5px] ${
+                      cloudNotice.type === 'success'
+                        ? 'border-[#C6DEC8] bg-[#EEF6EF] text-[#2E5A36]'
+                        : 'border-[#E5C9C5] bg-[#FDF7F6] text-[#9B3B2B]'
+                    }`}
+                  >
+                    {cloudNotice.message}
                   </div>
                 )}
               </section>

@@ -1,28 +1,45 @@
-import React, { useState } from 'react';
-import { Eye, EyeOff, KeyRound, Mail, ShieldCheck, UserPlus } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Cloud, Eye, EyeOff, HardDrive, KeyRound, Mail, ShieldCheck, UserPlus } from 'lucide-react';
 import { UserRole } from '../types';
+import { isHostedRuntime, type AuthMode } from '../api/client';
 
 interface AuthPageProps {
   storeName: string;
   workspaceSubtitle: string;
-  onLogin: (email: string, password: string) => { ok: boolean; error?: string };
+  initialAuthMode?: AuthMode;
+  isOnline?: boolean;
+  onOpenLanding?: () => void;
+  onLogin: (
+    identifier: string,
+    password: string,
+    mode: AuthMode,
+    syncFromCloud: boolean
+  ) => Promise<{ ok: boolean; error?: string }>;
   onSignUp: (payload: {
     name: string;
-    email: string;
+    username?: string;
+    email?: string;
     password: string;
     role: UserRole;
     department: string;
-  }) => { ok: boolean; error?: string };
+    mode: AuthMode;
+  }) => Promise<{ ok: boolean; error?: string }>;
 }
 
 export const AuthPage: React.FC<AuthPageProps> = ({
   storeName,
   workspaceSubtitle,
+  initialAuthMode = 'offline',
+  isOnline = true,
+  onOpenLanding,
   onLogin,
   onSignUp,
 }) => {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [authMode, setAuthMode] = useState<AuthMode>(isHostedRuntime ? 'online' : initialAuthMode);
+  const [syncFromCloud, setSyncFromCloud] = useState(false);
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -30,18 +47,35 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [role, setRole] = useState<UserRole>('Staff');
   const [agreedTerms, setAgreedTerms] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isHostedRuntime && !isOnline && authMode === 'online') {
+      setAuthMode('offline');
+      setSyncFromCloud(false);
+      setError(null);
+    }
+  }, [isOnline, authMode]);
 
   const switchMode = (nextMode: 'login' | 'signup') => {
     setMode(nextMode);
     setError(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setError(null);
 
+    if (authMode === 'online' && !isOnline) {
+      setError('No internet connection. Cloud sign-in/sign-up is temporarily disabled.');
+      return;
+    }
+
     if (mode === 'login') {
-      const res = onLogin(email.trim(), password);
+      setSubmitting(true);
+      const res = await onLogin(email.trim(), password, authMode, syncFromCloud);
+      setSubmitting(false);
       if (!res.ok) {
         setError(res.error ?? 'Incorrect email address or password.');
       }
@@ -50,6 +84,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
     if (!name.trim()) {
       setError('Please enter your full name.');
+      return;
+    }
+    if (authMode === 'offline' && !username.trim() && !email.trim()) {
+      setError('Please enter a username (or email address) for local sign-in.');
+      return;
+    }
+    if (authMode === 'online' && !email.trim()) {
+      setError('Email address is required for Online (Cloud) registration.');
       return;
     }
     if (password.length < 6) {
@@ -61,13 +103,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       return;
     }
 
-    const res = onSignUp({
+    setSubmitting(true);
+    const res = await onSignUp({
       name: name.trim(),
-      email: email.trim(),
+      username: username.trim() || undefined,
+      email: email.trim() || undefined,
       password,
       role,
       department: department.trim() || 'Operations',
+      mode: authMode,
     });
+    setSubmitting(false);
     if (!res.ok) {
       setError(res.error ?? 'Could not create account.');
     }
@@ -75,8 +121,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
   const fillAdminDemo = () => {
     setMode('login');
-    setEmail('arb32433@imcc.edu.ph');
-    setPassword('admin123');
+    setEmail(authMode === 'offline' ? 'admin' : 'admin@tallyledger.local');
+    setPassword('password123');
     setError(null);
   };
 
@@ -164,7 +210,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   <UserPlus className="h-4 w-4" />
                 </button>
 
-                {mode === 'login' && (
+                {mode === 'login' && !isHostedRuntime && (
                   <button
                     type="button"
                     onClick={fillAdminDemo}
@@ -187,6 +233,84 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 </span>
               </div>
 
+              {/* Desktop can work offline; hosted web builds always use Supabase. */}
+              <div className="mt-4">
+                {isHostedRuntime ? (
+                  <div className="border border-[#2D3227] bg-[#1D2019] px-3 py-2 text-[11px] text-[#B8B6AC]">
+                    <span className="inline-flex items-center gap-2">
+                      <Cloud className="h-3 w-3" /> Hosted workspace · Supabase
+                    </span>
+                  </div>
+                ) : (
+                <div
+                  role="group"
+                  aria-label="Connection mode"
+                  className="grid grid-cols-2 border border-[#2D3227] bg-[#1D2019] p-0.5"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('offline');
+                      setSyncFromCloud(false);
+                      setError(null);
+                    }}
+                    className={`flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium tracking-[0.06em] transition-colors ${
+                      authMode === 'offline'
+                        ? 'bg-[#2C3327] text-[#F5F2EB]'
+                        : 'text-[#8E9285] hover:text-[#D7D4CA]'
+                    }`}
+                  >
+                    <HardDrive className="h-3 w-3" />
+                    <span>Offline (Local)</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!isOnline}
+                    onClick={() => {
+                      if (!isOnline) return;
+                      setAuthMode('online');
+                      setError(null);
+                    }}
+                    title={!isOnline ? 'No internet connection. Cloud mode disabled.' : undefined}
+                    className={`flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium tracking-[0.06em] transition-colors ${
+                      !isOnline
+                        ? 'opacity-40 cursor-not-allowed text-[#6B7064]'
+                        : authMode === 'online'
+                          ? 'bg-[#B89260]/25 text-[#F5F2EB]'
+                          : 'text-[#8E9285] hover:text-[#D7D4CA]'
+                    }`}
+                  >
+                    <Cloud className="h-3 w-3" />
+                    <span>Online (Cloud)</span>
+                  </button>
+                </div>
+                )}
+                <p className="mt-1.5 text-[11px] text-[#7E8276]">
+                  {isHostedRuntime
+                    ? 'Accounts and workspace data are stored in the hosted database.'
+                    : authMode === 'offline'
+                    ? 'Uses local SQLite on this device. Works without internet.'
+                    : 'Verifies with Supabase PostgreSQL and supports cloud restore.'}
+                </p>
+                {!isOnline && (
+                  <p className="mt-1.5 text-[11px] text-[#F1B8B3]">
+                    You are offline. Cloud sign-in/sign-up is temporarily disabled until you reconnect.
+                  </p>
+                )}
+
+                {authMode === 'online' && mode === 'login' && !isHostedRuntime && (
+                  <label className="mt-2 flex items-center gap-2 text-[11.5px] text-[#B8B6AC] cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={syncFromCloud}
+                      onChange={(e) => setSyncFromCloud(e.target.checked)}
+                      className="h-3.5 w-3.5 accent-[#B89260]"
+                    />
+                    <span>Sync latest workspace from cloud on sign-in</span>
+                  </label>
+                )}
+              </div>
+
               {error && (
                 <div
                   role="alert"
@@ -198,33 +322,60 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
               <form onSubmit={handleSubmit} className="mt-6 space-y-5">
                 {mode === 'signup' && (
-                  <div>
-                    <label htmlFor="auth-name" className="sr-only">
-                      Full Name
-                    </label>
-                    <input
-                      id="auth-name"
-                      type="text"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Full Name"
-                      className="w-full border-0 border-b border-[#34392E] bg-transparent pb-2.5 pt-1 text-[13.5px] text-[#F5F2EB] placeholder-[#6B7064] focus:border-[#B89260] focus:outline-none transition-colors"
-                    />
-                  </div>
+                  <>
+                    <div>
+                      <label htmlFor="auth-name" className="sr-only">
+                        Full Name
+                      </label>
+                      <input
+                        id="auth-name"
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Full Name"
+                        className="w-full border-0 border-b border-[#34392E] bg-transparent pb-2.5 pt-1 text-[13.5px] text-[#F5F2EB] placeholder-[#6B7064] focus:border-[#B89260] focus:outline-none transition-colors"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="auth-username" className="sr-only">
+                        Username
+                      </label>
+                      <input
+                        id="auth-username"
+                        type="text"
+                        required={authMode === 'offline'}
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder={
+                          authMode === 'offline' ? 'Username' : 'Username (optional)'
+                        }
+                        className="w-full border-0 border-b border-[#34392E] bg-transparent pb-2.5 pt-1 text-[13.5px] text-[#F5F2EB] placeholder-[#6B7064] focus:border-[#B89260] focus:outline-none transition-colors"
+                      />
+                    </div>
+                  </>
                 )}
 
                 <div className="relative">
                   <label htmlFor="auth-email" className="sr-only">
-                    Email Address
+                    {mode === 'login' ? 'Username or Email' : 'Email Address'}
                   </label>
                   <input
                     id="auth-email"
-                    type="email"
-                    required
+                    type={mode === 'login' ? 'text' : 'email'}
+                    required={mode === 'login' || authMode === 'online'}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Email Address"
+                    placeholder={
+                      mode === 'login'
+                        ? authMode === 'offline'
+                          ? 'Username or Email'
+                          : 'Email or Username'
+                        : authMode === 'offline'
+                          ? 'Email Address (optional)'
+                          : 'Email Address'
+                    }
                     className="w-full border-0 border-b border-[#34392E] bg-transparent pb-2.5 pt-1 pr-7 text-[13.5px] text-[#F5F2EB] placeholder-[#6B7064] focus:border-[#B89260] focus:outline-none transition-colors"
                   />
                   <Mail
@@ -267,16 +418,22 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       <label htmlFor="auth-role" className="sr-only">
                         Role
                       </label>
-                      <select
-                        id="auth-role"
-                        value={role}
-                        onChange={(e) => setRole(e.target.value as UserRole)}
-                        className="w-full border-0 border-b border-[#34392E] bg-[#161813] pb-2.5 pt-1 text-[13.5px] text-[#F5F2EB] focus:border-[#B89260] focus:outline-none transition-colors"
-                      >
-                        <option value="Staff">Staff</option>
-                        <option value="Manager">Manager</option>
-                        <option value="Admin">Admin</option>
-                      </select>
+                      {isHostedRuntime ? (
+                        <p className="border-b border-[#34392E] py-2 text-[11px] text-[#8E9285]">
+                          Use the configured workspace owner email for the first administrator account; other registrations are staff.
+                        </p>
+                      ) : (
+                        <select
+                          id="auth-role"
+                          value={role}
+                          onChange={(e) => setRole(e.target.value as UserRole)}
+                          className="w-full border-0 border-b border-[#34392E] bg-[#161813] pb-2.5 pt-1 text-[13.5px] text-[#F5F2EB] focus:border-[#B89260] focus:outline-none transition-colors"
+                        >
+                          <option value="Staff">Staff</option>
+                          <option value="Manager">Manager</option>
+                          <option value="Admin">Admin</option>
+                        </select>
+                      )}
                     </div>
 
                     <div>
@@ -337,7 +494,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         <div className="flex flex-wrap items-center gap-5">
           <span>{storeName}</span>
           <span>Account Access</span>
-          <span>Local Workspace</span>
+                  <span>{isHostedRuntime ? 'Hosted Workspace' : 'Local Workspace'}</span>
+          {onOpenLanding && (
+            <button
+              type="button"
+              onClick={onOpenLanding}
+              className="text-[#C6A270] hover:text-[#F5F2EB] transition-colors tracking-[0.16em] uppercase"
+            >
+              Overview &amp; Docs ↗
+            </button>
+          )}
         </div>
         <span className="font-serif text-[13px] tracking-normal normal-case text-[#7E8276]">
           {storeName}.

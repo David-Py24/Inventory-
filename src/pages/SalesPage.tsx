@@ -1,39 +1,72 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowUpDown,
   CheckCircle2,
   Download,
+  Upload,
   Pencil,
   Plus,
   Search,
   Trash2,
   X,
+  Settings2,
 } from 'lucide-react';
-import { InventoryItem, SaleChannel, SaleRecord, SaleStatus } from '../types';
+import { InventoryItem, SaleChannel, SaleRecord, SaleStatus, SalesFieldKey, ShortcutAction, WorkspaceSettings } from '../types';
 import { downloadCsv, formatCurrency, formatNumber, getCurrencySymbol } from '../utils/format';
+import { api } from '../api/client';
+import type { UtangCustomer } from '../types';
 
 interface SalesPageProps {
   sales: SaleRecord[];
   inventory: InventoryItem[];
-  onAddSale: (sale: Omit<SaleRecord, 'id'>, deductInventory: boolean) => void;
-  onUpdateSale: (sale: SaleRecord) => void;
-  onDeleteSale: (id: string) => void;
+  onAddSale: (sale: Omit<SaleRecord, 'id'>, deductInventory: boolean) => void | Promise<void>;
+  onUpdateSale: (sale: SaleRecord) => void | Promise<void>;
+  onDeleteSale: (id: string) => void | Promise<void>;
+  requireCustomerName?: boolean;
+  requireSaleStatus?: boolean;
+  fieldVisibility?: Partial<Record<SalesFieldKey, boolean>>;
+  keyboardShortcuts?: Partial<Record<ShortcutAction, string>>;
+  onSaveSettings: (next: WorkspaceSettings) => void;
+  settings: WorkspaceSettings;
 }
 
 type SortField = 'orderNumber' | 'customerName' | 'channel' | 'quantity' | 'total' | 'status';
 type StatusFilter = 'All' | SaleStatus;
 
 const CHANNELS: SaleChannel[] = ['In-Store', 'Online', 'Wholesale', 'POS'];
-const STATUSES: SaleStatus[] = ['Completed', 'Pending', 'Refunded'];
+const STATUSES: SaleStatus[] = ['Completed', 'Pending', 'UTANG', 'PARTIAL', 'FOR_DELIVERY'];
 
 function getStatusBadgeClass(status: SaleStatus): string {
-  if (status === 'Completed') {
+  if (status === 'Completed' || status === 'COMPLETED') {
     return 'bg-[#EEF2EA] text-[#2E3628] border-[#D8E0D0]';
   }
-  if (status === 'Pending') {
+  if (status === 'Pending' || status === 'PENDING' || status === 'UTANG' || status === 'PARTIAL' || status === 'FOR_DELIVERY') {
     return 'bg-[#FBF3E4] text-[#8E6733] border-[#EAD8B8]';
   }
   return 'bg-[#F9ECE9] text-[#8C3A2B] border-[#E8C9C3]';
+}
+
+function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let quoted = false;
+  const input = text.replace(/^\uFEFF/, '');
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    if (char === '"' && quoted && input[i + 1] === '"') { cell += '"'; i += 1; }
+    else if (char === '"') quoted = !quoted;
+    else if (char === ',' && !quoted) { row.push(cell); cell = ''; }
+    else if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && input[i + 1] === '\n') i += 1;
+      row.push(cell); cell = '';
+      if (row.some((value) => value.trim())) rows.push(row);
+      row = [];
+    } else cell += char;
+  }
+  row.push(cell);
+  if (row.some((value) => value.trim())) rows.push(row);
+  return rows;
 }
 
 export const SalesPage: React.FC<SalesPageProps> = ({
@@ -42,6 +75,12 @@ export const SalesPage: React.FC<SalesPageProps> = ({
   onAddSale,
   onUpdateSale,
   onDeleteSale,
+  requireCustomerName = false,
+  requireSaleStatus = false,
+  fieldVisibility = {},
+  keyboardShortcuts = {},
+  onSaveSettings,
+  settings,
 }) => {
   const [search, setSearch] = useState('');
   const [channelFilter, setChannelFilter] = useState<'All' | SaleChannel>('All');
@@ -65,12 +104,67 @@ export const SalesPage: React.FC<SalesPageProps> = ({
   const [date, setDate] = useState('');
   const [notes, setNotes] = useState('');
   const [deductInventory, setDeductInventory] = useState(true);
+  const [customerId, setCustomerId] = useState('');
+  const [creditCustomers, setCreditCustomers] = useState<UtangCustomer[]>([]);
+  const [discountAmount, setDiscountAmount] = useState('0');
+  const [amountPaid, setAmountPaid] = useState('0');
+  const [importingNotebook, setImportingNotebook] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [visibleFields, setVisibleFields] = useState(fieldVisibility);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkChannel, setBulkChannel] = useState<SaleChannel>('In-Store');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const visible = (key: SalesFieldKey) => visibleFields[key] !== false;
+
+  useEffect(() => setVisibleFields(fieldVisibility), [fieldVisibility]);
+
+  const shortcutMatches = (event: KeyboardEvent, shortcut?: string) => {
+    if (!shortcut) return false;
+    const parts = shortcut.toLowerCase().split('+').map((part) => part.trim());
+    const key = parts[parts.length - 1];
+    return event.key.toLowerCase() === key && event.altKey === parts.includes('alt') &&
+      event.ctrlKey === parts.includes('ctrl') && event.shiftKey === parts.includes('shift') && event.metaKey === parts.includes('meta');
+  };
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = !!target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+      if (shortcutMatches(event, keyboardShortcuts.newSale) && !typing) { event.preventDefault(); openAddModal(); }
+      else if (shortcutMatches(event, keyboardShortcuts.bulkEditSales) && !typing) { event.preventDefault(); setSelectedIds(sales.map((sale) => sale.id)); }
+      else if (shortcutMatches(event, keyboardShortcuts.searchSales) && !typing) {
+        event.preventDefault(); document.querySelector<HTMLInputElement>('[aria-label="Search sales orders"]')?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [keyboardShortcuts]);
+
+  const saveFieldVisibility = (key: SalesFieldKey, checked: boolean) => {
+    const nextVisibility = { ...visibleFields, [key]: checked };
+    setVisibleFields(nextVisibility);
+    onSaveSettings({ ...settings, salesFieldVisibility: nextVisibility });
+  };
+
+  const applyBulkChannel = async () => {
+    setBulkBusy(true);
+    try {
+      await Promise.all(sales.filter((sale) => selectedIds.includes(sale.id)).map((sale) => onUpdateSale({ ...sale, channel: bulkChannel })));
+      setSelectedIds([]);
+    } finally { setBulkBusy(false); }
+  };
+
+  useEffect(() => {
+    api.getUtangCustomers().then(setCreditCustomers).catch(() => setCreditCustomers([]));
+  }, []);
 
   const summary = useMemo(() => {
-    const completed = sales.filter((s) => s.status === 'Completed');
-    const pending = sales.filter((s) => s.status === 'Pending');
-    const totalRevenue = completed.reduce((sum, s) => sum + s.quantity * s.unitPrice, 0);
-    const pendingTotal = pending.reduce((sum, s) => sum + s.quantity * s.unitPrice, 0);
+    const completed = sales.filter((s) => s.status === 'Completed' || s.status === 'COMPLETED');
+    const pending = sales.filter((s) => ['Pending', 'PENDING', 'UTANG', 'PARTIAL', 'FOR_DELIVERY'].includes(s.status));
+    const totalRevenue = completed.reduce((sum, s) => sum + s.quantity * s.unitPrice - (s.discountAmount ?? 0), 0);
+    const pendingTotal = pending.reduce((sum, s) => sum + Math.max(0, s.quantity * s.unitPrice - (s.discountAmount ?? 0) - (s.amountPaid ?? 0)), 0);
     const totalOrders = sales.length;
     const avgOrderValue = completed.length > 0 ? totalRevenue / completed.length : 0;
 
@@ -106,7 +200,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
       else if (sortField === 'channel') comparison = a.channel.localeCompare(b.channel);
       else if (sortField === 'quantity') comparison = a.quantity - b.quantity;
       else if (sortField === 'total')
-        comparison = a.quantity * a.unitPrice - b.quantity * b.unitPrice;
+        comparison = (a.quantity * a.unitPrice - (a.discountAmount ?? 0)) - (b.quantity * b.unitPrice - (b.discountAmount ?? 0));
       else if (sortField === 'status') comparison = a.status.localeCompare(b.status);
       return sortDir === 'asc' ? comparison : -comparison;
     });
@@ -120,8 +214,8 @@ export const SalesPage: React.FC<SalesPageProps> = ({
   const filteredRevenue = useMemo(
     () =>
       filteredSales
-        .filter((s) => s.status !== 'Refunded')
-        .reduce((sum, s) => sum + s.quantity * s.unitPrice, 0),
+        .filter((s) => s.status !== 'Refunded' && s.status !== 'REFUNDED' && s.status !== 'VOIDED')
+        .reduce((sum, s) => sum + s.quantity * s.unitPrice - (s.discountAmount ?? 0), 0),
     [filteredSales]
   );
 
@@ -142,6 +236,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
     });
 
   const openAddModal = () => {
+    setSubmitError('');
     setEditingSale(null);
     setOrderNumber(`SO-2026-${Math.floor(1050 + Math.random() * 899)}`);
     setCustomerName('');
@@ -155,6 +250,9 @@ export const SalesPage: React.FC<SalesPageProps> = ({
     setDate(formatToday());
     setNotes('');
     setDeductInventory(true);
+    setCustomerId('');
+    setDiscountAmount('0');
+    setAmountPaid('0');
     setModalOpen(true);
   };
 
@@ -162,6 +260,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
     setEditingSale(sale);
     setOrderNumber(sale.orderNumber);
     setCustomerName(sale.customerName);
+    setCustomerId(sale.customerId ?? '');
     setChannel(sale.channel);
     setSelectedInventoryId(sale.inventoryItemId ?? '');
     setItemName(sale.itemName);
@@ -171,6 +270,8 @@ export const SalesPage: React.FC<SalesPageProps> = ({
     setStatus(sale.status);
     setDate(sale.date);
     setNotes(sale.notes ?? '');
+    setDiscountAmount(String(sale.discountAmount ?? 0));
+    setAmountPaid(String(sale.amountPaid ?? 0));
     setDeductInventory(false);
     setModalOpen(true);
   };
@@ -184,42 +285,63 @@ export const SalesPage: React.FC<SalesPageProps> = ({
       setSku(found.sku);
       // Suggest a default retail markup over unit cost if price is currently 0
       if ((parseFloat(unitPrice) || 0) === 0) {
-        setUnitPrice((found.unitCost * 1.35).toFixed(2));
+        setUnitPrice((found.unitPrice || found.unitCost * 1.35).toFixed(2));
       }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const parsedQty = Math.max(1, parseInt(quantity, 10) || 1);
+    setSubmitError('');
+    const parsedQty = Math.max(0.001, parseFloat(quantity) || 0.001);
     const parsedPrice = Math.max(0, parseFloat(unitPrice) || 0);
-    if (!orderNumber.trim() || !customerName.trim() || !itemName.trim()) return;
+    const parsedDiscount = Math.max(0, parseFloat(discountAmount) || 0);
+    const parsedPaid = Math.max(0, parseFloat(amountPaid) || 0);
+    const selectedCustomer = creditCustomers.find((customer) => customer.id === customerId);
+    if (!orderNumber.trim() || (!customerId && !customerName.trim()) || !itemName.trim()) {
+      setSubmitError('Enter an order number, customer or walk-in name, and item name.');
+      return;
+    }
+    if (['UTANG', 'PARTIAL'].includes(status) && !customerId) {
+      setSubmitError('Choose a utang customer for a credit sale.');
+      return;
+    }
 
     const payload = {
       orderNumber: orderNumber.trim(),
-      customerName: customerName.trim(),
+      customerName: selectedCustomer?.fullName ?? customerName.trim(),
       channel,
       inventoryItemId: selectedInventoryId || undefined,
       itemName: itemName.trim(),
       sku: sku.trim() || undefined,
       quantity: parsedQty,
       unitPrice: parsedPrice,
+      unitSold: inventory.find((item) => item.id === selectedInventoryId)?.sellingUnit ?? inventory.find((item) => item.id === selectedInventoryId)?.baseUnit ?? 'pc',
+      discountAmount: parsedDiscount,
+      amountPaid: status === 'Completed' ? parsedQty * parsedPrice - parsedDiscount : parsedPaid,
+      ...(customerId ? { customerId } : {}),
+      recordSource: 'POS_LIVE' as const,
+      deductStock: deductInventory,
       status,
       date: date.trim() || formatToday(),
       notes: notes.trim() || undefined,
     };
 
-    if (editingSale) {
-      onUpdateSale({ ...editingSale, ...payload });
-    } else {
-      onAddSale(payload, deductInventory && Boolean(selectedInventoryId) && status !== 'Refunded');
+    try {
+      if (editingSale) {
+        await onUpdateSale({ ...editingSale, ...payload });
+      } else {
+        await onAddSale(payload, deductInventory && Boolean(selectedInventoryId) && status !== 'Refunded' && status !== 'VOIDED');
+      }
+      setModalOpen(false);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Could not save sale');
     }
-    setModalOpen(false);
   };
 
   const handleExportCsv = () => {
     downloadCsv(
-      'hearthledger-sales.csv',
+      'tallyledger-sales.csv',
       ['Order #', 'Customer', 'Channel', 'SKU', 'Item', 'Quantity', 'Unit Price', 'Total', 'Status', 'Date'],
       filteredSales.map((s) => [
         s.orderNumber,
@@ -229,11 +351,57 @@ export const SalesPage: React.FC<SalesPageProps> = ({
         s.itemName,
         s.quantity,
         s.unitPrice.toFixed(2),
-        (s.quantity * s.unitPrice).toFixed(2),
+        (s.quantity * s.unitPrice - (s.discountAmount ?? 0)).toFixed(2),
         s.status,
         s.date,
       ])
     );
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeleteError('');
+    try {
+      await onDeleteSale(id);
+      setConfirmDeleteId(null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Could not void sale');
+    }
+  };
+
+  const handleNotebookImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const parsed = parseCsvRows(await file.text());
+      if (parsed.length < 2) throw new Error('CSV needs a header row and at least one data row');
+      const header = parsed[0].map((value) => value.trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
+      const findColumn = (...names: string[]) => header.findIndex((value) => names.includes(value));
+      const dateColumn = findColumn('date', 'soldat');
+      const quantityColumn = findColumn('qty', 'quantity');
+      const productColumn = findColumn('product', 'item', 'productname');
+      const salesColumn = findColumn('sales', 'total', 'amount');
+      if ([dateColumn, quantityColumn, productColumn, salesColumn].some((index) => index < 0)) {
+        throw new Error('CSV headers must include Date, Qty, Product, and Sales');
+      }
+      const rows = parsed.slice(1).map((cells, index) => ({
+        rowNumber: index + 2,
+        date: cells[dateColumn] ?? '',
+        quantity: Number(cells[quantityColumn]),
+        product: cells[productColumn] ?? '',
+        sales: Number(String(cells[salesColumn] ?? '').replace(/[,₱$\s]/g, '')),
+      }));
+      const importId = `${file.name.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 20)}-${file.lastModified}-${file.size}`;
+      if (!window.confirm(`Import ${rows.length} notebook rows from ${file.name}? Imported rows will be archived and will not deduct stock.`)) return;
+      setImportingNotebook(true);
+      const result = await api.importNotebookSales(importId, rows);
+      window.alert(`Imported ${result.imported} rows. Skipped ${result.skipped.length}.`);
+      window.location.reload();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Could not import notebook CSV');
+    } finally {
+      setImportingNotebook(false);
+    }
   };
 
   return (
@@ -244,6 +412,11 @@ export const SalesPage: React.FC<SalesPageProps> = ({
         </h1>
 
         <div className="flex items-center gap-2.5">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#DDD6C7] bg-[#FCFBF8] px-3.5 py-2 text-[12.5px] font-medium text-[#2C3327] hover:bg-[#EFEAE0]">
+            <Upload className="h-3.5 w-3.5 text-[#6E7166]" />
+            <span>{importingNotebook ? 'Importing…' : 'Import notebook CSV'}</span>
+            <input type="file" accept=".csv,text/csv" className="sr-only" disabled={importingNotebook} onChange={handleNotebookImport} />
+          </label>
           <button
             type="button"
             onClick={handleExportCsv}
@@ -337,34 +510,35 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                 </option>
               ))}
             </select>
+            <select aria-label="Filter by sale status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} className="rounded-lg border border-[#E3DDD0] bg-white px-3 py-2 text-[12.5px] font-medium text-[#2C3327] focus:border-[#B89260] focus:outline-none">
+              {(['All', ...STATUSES, 'Refunded', 'VOIDED'] as StatusFilter[]).map((statusOption) => <option key={statusOption} value={statusOption}>{statusOption === 'All' ? 'All statuses' : statusOption}</option>)}
+            </select>
+            <div className="relative">
+              <button type="button" onClick={() => setSettingsOpen((open) => !open)} aria-label="Sales display settings" className="inline-flex items-center gap-2 rounded-lg border border-[#DDD6C7] bg-white px-3 py-2 text-[12.5px] font-medium text-[#2C3327]"><Settings2 className="h-4 w-4"/><span className="hidden sm:inline">View</span></button>
+              {settingsOpen && <div className="absolute right-0 z-20 mt-2 w-56 rounded-lg border border-[#E3DDD0] bg-white p-3 shadow-lg"><div className="mb-2 text-xs font-semibold">Show fields</div>{(['customerName','channel','inventoryItem','sku','quantity','unitPrice','status','date','notes'] as SalesFieldKey[]).map((key) => <label key={key} className="flex items-center gap-2 py-1 text-xs capitalize"><input type="checkbox" checked={visible(key)} onChange={(e) => saveFieldVisibility(key,e.target.checked)}/>{key === 'inventoryItem' ? 'Item' : key.replace(/[A-Z]/g, (m) => ` ${m.toLowerCase()}`)}</label>)}</div>}
+            </div>
           </div>
-
-          <div
-            role="group"
-            aria-label="Filter by sale status"
-            className="flex items-center gap-1 overflow-x-auto rounded-lg bg-[#EFEAE0] p-1"
-          >
-            {(['All', 'Completed', 'Pending', 'Refunded'] as StatusFilter[]).map((st) => {
-              const active = statusFilter === st;
-              return (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => setStatusFilter(st)}
-                  className={`rounded-md px-2.5 sm:px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap shrink-0 ${
-                    active
-                      ? 'bg-[#FCFBF8] text-[#23281E] shadow-xs'
-                      : 'text-[#6E7166] hover:text-[#23281E]'
-                  }`}
-                >
-                  {st}
-                </button>
-              );
-            })}
-          </div>
+        {selectedIds.length > 0 && <div className="flex items-center justify-between border-t border-[#EFEAE0] px-4 py-2 text-xs"><span>{selectedIds.length} sales selected</span><div className="flex gap-2"><select aria-label="Bulk sale channel" value={bulkChannel} onChange={(e) => setBulkChannel(e.target.value as SaleChannel)} className="rounded border px-2 py-1">{CHANNELS.map((value) => <option key={value}>{value}</option>)}</select><button type="button" disabled={bulkBusy} onClick={applyBulkChannel} className="rounded bg-[#2C3327] px-3 py-1 text-white">Apply channel</button><button type="button" onClick={() => setSelectedIds([])}>Clear</button></div></div>}
         </div>
 
-        {filteredSales.length === 0 ? (
+        {sales.length === 0 ? (
+          <div className="py-12 px-6 text-center">
+            <div className="text-[14px] font-medium text-[#23281E]">
+              Your sales table is empty
+            </div>
+            <p className="mt-1 text-[12.5px] text-[#6E7166]">
+              Record your first sale to start tracking orders and revenue.
+            </p>
+            <button
+              type="button"
+              onClick={openAddModal}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#2C3327] px-4 py-2 text-[12.5px] font-medium text-[#FAF8F3] hover:bg-[#3A4333]"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Record Sale</span>
+            </button>
+          </div>
+        ) : filteredSales.length === 0 ? (
           <div className="py-12 px-6 text-center">
             <div className="text-[14px] font-medium text-[#23281E]">
               No sales orders match your filters
@@ -386,44 +560,45 @@ export const SalesPage: React.FC<SalesPageProps> = ({
             {/* Mobile card layout */}
             <div className="divide-y divide-[#EFEAE0] md:hidden">
               {filteredSales.map((sale) => {
-                const total = sale.quantity * sale.unitPrice;
+                const total = sale.quantity * sale.unitPrice - (sale.discountAmount ?? 0);
                 return (
                   <div key={sale.id} className="p-4 space-y-2.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
+                        <input className="mr-2" aria-label={`Select ${sale.orderNumber}`} type="checkbox" checked={selectedIds.includes(sale.id)} onChange={(e) => setSelectedIds((ids) => e.target.checked ? [...ids, sale.id] : ids.filter((id) => id !== sale.id))}/>
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-[11.5px] font-semibold text-[#6E7166]">
                             {sale.orderNumber}
                           </span>
-                          <span className="text-[11px] text-[#8A8C82]">{sale.date}</span>
+                          {visible('date') && <span className="text-[11px] text-[#8A8C82]">{sale.date}</span>}
                         </div>
-                        <div className="mt-0.5 truncate text-[14px] font-semibold text-[#23281E]">
+                        {visible('customerName') && <div className="mt-0.5 truncate text-[14px] font-semibold text-[#23281E]">
                           {sale.customerName}
-                        </div>
-                        <div className="truncate text-[12.5px] text-[#6E7166]">
+                        </div>}
+                        {visible('inventoryItem') && <div className="truncate text-[12.5px] text-[#6E7166]">
                           {sale.itemName} · {sale.quantity} × {formatCurrency(sale.unitPrice)}
-                        </div>
+                        </div>}
                       </div>
-                      <span
+                      {visible('status') && <span
                         className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${getStatusBadgeClass(
                           sale.status
                         )}`}
                       >
                         {sale.status}
-                      </span>
+                      </span>}
                     </div>
 
                     <div className="flex items-center justify-between pt-1">
-                      <div className="text-[12px] text-[#6E7166]">
+                      {visible('channel') && <div className="text-[12px] text-[#6E7166]">
                         Channel: <span className="font-medium text-[#23281E]">{sale.channel}</span>
-                      </div>
+                      </div>}
                       <div className="text-[14.5px] font-semibold text-[#23281E] tabular-nums">
                         {formatCurrency(total)}
                       </div>
                     </div>
 
                     <div className="flex items-center justify-end gap-2 pt-1">
-                      {sale.status === 'Pending' && (
+                    {(sale.status === 'Pending' || sale.status === 'PENDING') && (
                         <button
                           type="button"
                           onClick={() => onUpdateSale({ ...sale, status: 'Completed' })}
@@ -460,6 +635,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-[#EFEAE0] bg-[#F8F5EE]/70 text-[11.5px] font-semibold tracking-wide text-[#6E7166]">
+                    <th className="py-3 pl-5 pr-3"><input aria-label="Select all visible sales" type="checkbox" checked={filteredSales.length > 0 && filteredSales.every((sale) => selectedIds.includes(sale.id))} onChange={(e) => setSelectedIds(e.target.checked ? filteredSales.map((sale) => sale.id) : [])}/></th>
                     <th className="py-3 pl-5 pr-3">
                       <button
                         type="button"
@@ -470,7 +646,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
                     </th>
-                    <th className="px-3 py-3">
+                    {visible('customerName') && <th className="px-3 py-3">
                       <button
                         type="button"
                         onClick={() => toggleSort('customerName')}
@@ -479,9 +655,9 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                         <span>Customer</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
-                    </th>
-                    <th className="px-3 py-3">Item</th>
-                    <th className="px-3 py-3">
+                    </th>}
+                    {visible('inventoryItem') && <th className="px-3 py-3">Item</th>}
+                    {visible('channel') && <th className="px-3 py-3">
                       <button
                         type="button"
                         onClick={() => toggleSort('channel')}
@@ -490,8 +666,8 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                         <span>Channel</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
-                    </th>
-                    <th className="px-3 py-3 text-right">
+                    </th>}
+                    {visible('quantity') && <th className="px-3 py-3 text-right">
                       <button
                         type="button"
                         onClick={() => toggleSort('quantity')}
@@ -500,7 +676,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                         <span>Qty</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
-                    </th>
+                    </th>}
                     <th className="px-3 py-3 text-right">
                       <button
                         type="button"
@@ -511,7 +687,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
                     </th>
-                    <th className="px-3 py-3">
+                    {visible('status') && <th className="px-3 py-3">
                       <button
                         type="button"
                         onClick={() => toggleSort('status')}
@@ -520,46 +696,47 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                         <span>Status</span>
                         <ArrowUpDown className="h-3 w-3 opacity-60" />
                       </button>
-                    </th>
+                    </th>}
                     <th className="py-3 pl-3 pr-5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EFEAE0] text-[13px]">
                   {filteredSales.map((sale) => {
-                    const total = sale.quantity * sale.unitPrice;
+                    const total = sale.quantity * sale.unitPrice - (sale.discountAmount ?? 0);
                     return (
                       <tr key={sale.id} className="hover:bg-[#F8F5EE]/60 transition-colors">
+                        <td className="py-3.5 pl-5 pr-3 align-top"><input aria-label={`Select ${sale.orderNumber}`} type="checkbox" checked={selectedIds.includes(sale.id)} onChange={(e) => setSelectedIds((ids) => e.target.checked ? [...ids, sale.id] : ids.filter((id) => id !== sale.id))}/></td>
                         <td className="py-3.5 pl-5 pr-3 align-top">
                           <div className="font-mono text-[12px] font-semibold text-[#23281E]">
                             {sale.orderNumber}
                           </div>
-                          <div className="text-[11px] text-[#7D8075]">{sale.date}</div>
+                          {visible('date') && <div className="text-[11px] text-[#7D8075]">{sale.date}</div>}
                         </td>
-                        <td className="px-3 py-3.5 align-top">
+                        {visible('customerName') && <td className="px-3 py-3.5 align-top">
                           <div className="font-medium text-[#23281E]">{sale.customerName}</div>
-                          {sale.notes && (
+                          {visible('notes') && sale.notes && (
                             <div className="mt-0.5 max-w-[200px] truncate text-[11px] text-[#7D8075]">
                               {sale.notes}
                             </div>
                           )}
-                        </td>
-                        <td className="px-3 py-3.5 align-top">
+                        </td>}
+                        {visible('inventoryItem') && <td className="px-3 py-3.5 align-top">
                           <div className="text-[#23281E]">{sale.itemName}</div>
-                          {sale.sku && (
+                          {visible('sku') && sale.sku && (
                             <div className="font-mono text-[11px] text-[#7D8075]">{sale.sku}</div>
                           )}
-                        </td>
-                        <td className="px-3 py-3.5 align-top text-[#55584F]">{sale.channel}</td>
-                        <td className="px-3 py-3.5 align-top text-right tabular-nums text-[#23281E]">
+                        </td>}
+                        {visible('channel') && <td className="px-3 py-3.5 align-top text-[#55584F]">{sale.channel}</td>}
+                        {visible('quantity') && <td className="px-3 py-3.5 align-top text-right tabular-nums text-[#23281E]">
                           {formatNumber(sale.quantity)}
-                        </td>
+                        </td>}
                         <td className="px-3 py-3.5 align-top text-right tabular-nums">
                           <div className="font-semibold text-[#23281E]">{formatCurrency(total)}</div>
-                          <div className="text-[11px] text-[#7D8075]">
+                          {visible('unitPrice') && <div className="text-[11px] text-[#7D8075]">
                             {formatCurrency(sale.unitPrice)} ea
-                          </div>
+                          </div>}
                         </td>
-                        <td className="px-3 py-3.5 align-top">
+                        {visible('status') && <td className="px-3 py-3.5 align-top">
                           <span
                             className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${getStatusBadgeClass(
                               sale.status
@@ -567,10 +744,10 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                           >
                             {sale.status}
                           </span>
-                        </td>
+                        </td>}
                         <td className="py-3.5 pl-3 pr-5 align-top text-right">
                           <div className="inline-flex items-center gap-1">
-                            {sale.status === 'Pending' && (
+                            {(sale.status === 'Pending' || sale.status === 'PENDING') && (
                               <button
                                 type="button"
                                 onClick={() => onUpdateSale({ ...sale, status: 'Completed' })}
@@ -674,12 +851,20 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                   </label>
                   <input
                     type="text"
-                    required
+                    required={requireCustomerName && !customerId}
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     placeholder="e.g. Alder & Oak Studio"
                     className="mt-1.5 w-full rounded-lg border border-[#E3DDD0] bg-white px-3 py-2 text-[13px] text-[#23281E] focus:border-[#B89260] focus:outline-none"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#55584F]">Utang customer (optional)</label>
+                  <select value={customerId} onChange={(e) => { setCustomerId(e.target.value); const found = creditCustomers.find((c) => c.id === e.target.value); if (found) setCustomerName(found.fullName); }} className="mt-1.5 w-full rounded-lg border border-[#E3DDD0] bg-white px-3 py-2 text-[13px] text-[#23281E]">
+                    <option value="">Walk-in / no ledger</option>
+                    {creditCustomers.map((customer) => <option key={customer.id} value={customer.id}>{customer.fullName} · ₱{customer.currentBalance.toFixed(2)}</option>)}
+                  </select>
                 </div>
 
                 <div>
@@ -752,7 +937,8 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                   </label>
                   <input
                     type="number"
-                    min={1}
+                    min={0.001}
+                    step="0.001"
                     required
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
@@ -775,7 +961,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                   />
                 </div>
 
-                <div>
+                {(requireSaleStatus || customerId) && <div>
                   <label className="block text-[11.5px] font-semibold text-[#55584F]">Status</label>
                   <select
                     value={status}
@@ -788,6 +974,17 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                       </option>
                     ))}
                   </select>
+                </div>}
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#55584F]">Discount ({getCurrencySymbol()})</label>
+                  <input type="number" min="0" step="0.01" value={discountAmount} onChange={(e) => setDiscountAmount(e.target.value)} className="mt-1.5 w-full rounded-lg border border-[#E3DDD0] bg-white px-3 py-2 text-[13px]" />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#55584F]">Amount paid ({getCurrencySymbol()})</label>
+                  <input type="number" min="0" step="0.01" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} disabled={status === 'Completed'} className="mt-1.5 w-full rounded-lg border border-[#E3DDD0] bg-white px-3 py-2 text-[13px] disabled:opacity-60" />
                 </div>
               </div>
 
@@ -816,14 +1013,13 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                 />
               </div>
 
+              {submitError && <p role="alert" className="rounded-lg border border-[#E8C9C3] bg-[#F9ECE9] px-3 py-2 text-[12px] text-[#8C3A2B]">{submitError}</p>}
+
               <div className="flex items-center justify-between border-t border-[#EFEAE0] pt-4">
                 <div className="text-[12.5px] text-[#6E7166]">
                   Order Total:{' '}
                   <strong className="text-[14px] text-[#23281E] tabular-nums">
-                    {formatCurrency(
-                      (Math.max(1, parseInt(quantity, 10) || 1)) *
-                        (Math.max(0, parseFloat(unitPrice) || 0))
-                    )}
+                    {formatCurrency(Math.max(0, (parseFloat(quantity) || 0) * (parseFloat(unitPrice) || 0) - (parseFloat(discountAmount) || 0)))}
                   </strong>
                 </div>
 
@@ -852,10 +1048,11 @@ export const SalesPage: React.FC<SalesPageProps> = ({
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1B1F17]/50 p-4 backdrop-blur-[1px]">
           <div className="w-full max-w-sm rounded-2xl border border-[#E6E0D3] bg-[#FCFBF8] p-6 shadow-xl">
-            <h3 className="font-serif text-[18px] font-semibold text-[#23281E]">Delete Sale?</h3>
+            <h3 className="font-serif text-[18px] font-semibold text-[#23281E]">Void Sale?</h3>
             <p className="mt-2 text-[13px] text-[#6E7166]">
-              This will permanently remove the sale record from your ledger.
+              The sale will be marked void and any deducted inventory will be returned.
             </p>
+            {deleteError && <p role="alert" className="mt-3 rounded-lg border border-[#E8C9C3] bg-[#F9ECE9] px-3 py-2 text-[12px] text-[#8C3A2B]">{deleteError}</p>}
             <div className="mt-5 flex justify-end gap-2.5">
               <button
                 type="button"
@@ -866,13 +1063,10 @@ export const SalesPage: React.FC<SalesPageProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  onDeleteSale(confirmDeleteId);
-                  setConfirmDeleteId(null);
-                }}
+                onClick={() => void handleDelete(confirmDeleteId)}
                 className="rounded-lg bg-[#8C3A2B] px-4 py-2 text-[12.5px] font-medium text-white hover:bg-[#732E22]"
               >
-                Delete
+                Void sale
               </button>
             </div>
           </div>
